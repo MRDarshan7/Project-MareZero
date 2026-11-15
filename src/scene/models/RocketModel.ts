@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LanderModel } from './LanderModel';
 import { RocketTextures } from '../materials/RocketTextures';
+import { applyBranding, BrandingDecals } from './RocketBranding';
 
 /**
  * Unified Single Craft Rig & Production PBR Rocket Model
@@ -24,6 +25,7 @@ export class RocketModel {
   public fairingLeft: THREE.Group;
   public fairingRight: THREE.Group;
   public lander: LanderModel;
+  public branding: BrandingDecals | null = null;
 
   // Visual effects
   public boosterPlume: THREE.Mesh;
@@ -121,9 +123,9 @@ export class RocketModel {
     aftShield.position.y = 0.4;
     this.boosterStage.add(aftShield);
 
-    // 4 Aerodynamic Grid Fins at top of booster
+    // 4 Aerodynamic Grid Fins at top of booster (diagonal alignment at 45 deg, clear of camera face)
     for (let f = 0; f < 4; f++) {
-      const finAngle = (f * Math.PI) / 2;
+      const finAngle = (f * Math.PI) / 2 + Math.PI / 4;
       const finGroup = new THREE.Group();
       finGroup.position.set(
         Math.cos(finAngle) * (this.boosterRadius + 0.35),
@@ -302,6 +304,9 @@ export class RocketModel {
 
     // Master craft rig root is standard scale (1.0)
     this.craftRig.scale.set(1.0, 1.0, 1.0);
+
+    // Apply authentic national and team branding (Indian Flag & MAREZERO)
+    this.branding = applyBranding(this, this.lander);
   }
 
   public registerScene(scene: THREE.Scene): void {

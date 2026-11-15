@@ -409,10 +409,14 @@ export function computeCameraState(
     // -------------------------------------------------------------------------
     const dollyFactor = Math.sin(seg(p, 0.35, 0.62) * Math.PI); // Smooth arc [0 -> 1 -> 0]
     const dollyZ = THREE.MathUtils.lerp(16.0, 38.0, ease(dollyFactor));
-    const targetY = craft.landerWorldPos.y;
+    
+    // Smoothly transition camera focus from booster separation staging zone (y ~ 54) to lander release (y ~ 70)
+    const stageTransition = ease(seg(p, 0.38, 0.50));
+    const lookY = THREE.MathUtils.lerp(craft.craftRigPos.y + 10.0, craft.landerWorldPos.y, stageTransition);
+    const camY = THREE.MathUtils.lerp(craft.craftRigPos.y + 11.5, craft.landerWorldPos.y * 0.85 + 3.0, stageTransition);
 
-    camPos.set(0, targetY * 0.85 + 3.0, dollyZ);
-    lookTarget.set(0, targetY, craft.landerWorldPos.z);
+    camPos.set(0, camY, dollyZ);
+    lookTarget.set(0, lookY, craft.landerWorldPos.z);
   } else if (p < 0.84) {
     // -------------------------------------------------------------------------
     // Powered Descent Camera (p = 0.62 -> 0.84)
