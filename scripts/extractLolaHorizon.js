@@ -1,27 +1,8 @@
 #!/usr/bin/env node
-/**
- * extractLolaHorizon.js
- * 
- * Pipeline script for extracting true 360-degree horizon profiles from LOLA DEM datasets.
- * 
- * Data Sources:
- * - NASA PDS Geosciences Node: LOLA Polar DEM LDEM_75S_120M (120 meters/pixel)
- * - USGS Astrogeology / LROC QuickMap (quickmap.lroc.asu.edu)
- * - NASA Moon Trek (trek.nasa.gov)
- * 
- * Algorithm:
- * For a given observer site (lat, lon, elevation_km, observer_mast_height_m = 2.0m):
- * Cast 360 azimuthal rays (0° to 359° in steps of 1°).
- * Along each ray, sample DEM elevation h(r) at radial step dr = 120m out to r_max = 60 km.
- * Account for lunar spherical curvature (R_Moon = 1737.4 km):
- *   curvature_drop(r) = r^2 / (2 * R_Moon)
- * Horizon elevation angle alpha(r) = atan2( (h(r) - h_0 - curvature_drop(r)), r ) in degrees.
- * Horizon profile[az] = max(0, max_r(alpha(r))).
- * 
- * Usage:
- *   node scripts/extractLolaHorizon.js --lat=-89.78 --lon=129.2 --out=shackleton_ridge_horizon.json
+/** Synthetic terrain demonstration only. This script reads no measured elevation data.
+ * The historical filename is retained for compatibility; it is not a DEM extractor.
+ * Usage: node scripts/extractLolaHorizon.js --lat=-89.78 --lon=129.2 --out=synthetic-horizon.json
  */
-
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -38,7 +19,7 @@ function parseArgs() {
     elevationKm: 1.35,
     mastHeightM: 2.0,
     maxDistanceKm: 60.0,
-    stepDistanceKm: 0.12, // 120m sampling matching LOLA LDEM 120m resolution
+    stepDistanceKm: 0.12, // Synthetic sampling interval in km
     out: path.join(__dirname, 'extracted_horizon.json')
   };
 
@@ -51,11 +32,8 @@ function parseArgs() {
   return args;
 }
 
-/**
- * Analytical DEM query function matching LOLA South Polar feature statistics.
- * In a full offline GIS pipeline, this reads directly from the GeoTIFF raster using GDAL or geotiff.js.
- */
-function queryLolaDemElevation(lat, lon) {
+/** Invented analytic elevation function, not a raster reader. */
+function querySyntheticElevation(lat, lon) {
   // Distance from South Pole in km
   const polarDistKm = (90 + lat) * (Math.PI / 180) * R_MOON_KM;
   const radLon = (lon * Math.PI) / 180;
@@ -81,7 +59,7 @@ function queryLolaDemElevation(lat, lon) {
 }
 
 function computeRaycastHorizon(config) {
-  console.log(`Extracting 360-ray LOLA horizon profile:`);
+  console.log(`Generating an approximate terrain profile (synthetic):`);
   console.log(`Observer coordinates: lat=${config.lat.toFixed(4)}°, lon=${config.lon.toFixed(4)}°, elev=${config.elevationKm} km`);
   console.log(`Max raycast distance: ${config.maxDistanceKm} km at step ${config.stepDistanceKm * 1000} m`);
 
@@ -101,7 +79,7 @@ function computeRaycastHorizon(config) {
       const targetLon = config.lon + deltaLonDeg;
 
       // Sample terrain elevation
-      const terrainHeightKm = queryLolaDemElevation(targetLat, targetLon);
+      const terrainHeightKm = querySyntheticElevation(targetLat, targetLon);
 
       // Curvature drop: drop = r^2 / (2 * R_Moon)
       const curvatureDropKm = (r * r) / (2.0 * R_MOON_KM);
@@ -123,6 +101,7 @@ function computeRaycastHorizon(config) {
 }
 
 function main() {
+  console.warn('Warning: synthetic demonstration only. No real terrain data is read.');
   const config = parseArgs();
   const profile = computeRaycastHorizon(config);
 
@@ -133,8 +112,8 @@ function main() {
 
   const exportPayload = {
     metadata: {
-      generator: 'NASA LOLA LDEM Raycaster v1.0',
-      sourceDataset: 'LRO LOLA Polar DEM LDEM_75S_120M',
+      generator: 'Synthetic horizon demonstration v1',
+      sourceDataset: 'Invented analytic terrain; no measured dataset',
       latitude: config.lat,
       longitude: config.lon,
       elevationKm: config.elevationKm,

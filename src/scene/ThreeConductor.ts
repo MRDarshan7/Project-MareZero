@@ -58,6 +58,7 @@ export class ThreeConductor {
 
   // Decoupled frame progress listener callback
   public onFrameProgress?: (currentP: number, targetP: number) => void;
+  public onBeforeRender?: (currentP: number) => void;
 
   // Pre-allocated scratch objects for zero GC in the render loop
   private readonly craftDims: RocketDimensions;
@@ -67,8 +68,8 @@ export class ThreeConductor {
   private readonly _craftWorldQuat = new THREE.Quaternion();
   private readonly _sunDir = new THREE.Vector3();
   private readonly _skyColor = new THREE.Color();
-  private readonly _dawnColor = new THREE.Color(0x1e3a8a);
-  private readonly _spaceColor = new THREE.Color(0x030712);
+  private readonly _dawnColor = new THREE.Color(0x0c0d0b);
+  private readonly _spaceColor = new THREE.Color(0x0c0d0b);
   private readonly _domeOrbit = { yaw: 0.5, pitch: 0.38, zoom: 32.0 };
 
   constructor(canvas: HTMLCanvasElement) {
@@ -80,10 +81,11 @@ export class ThreeConductor {
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
       antialias: true,
+      preserveDrawingBuffer: true,
       alpha: true,
       powerPreference: 'high-performance'
     });
-    this.renderer.setSize(this.width, this.height);
+    this.renderer.setSize(this.width, this.height, false);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -96,7 +98,7 @@ export class ThreeConductor {
 
     // Scene & Camera
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x060b17);
+    this.scene.background = new THREE.Color(0x0c0d0b);
 
     this.camera = new THREE.PerspectiveCamera(46, this.width / (this.height || 1), 0.1, 1500);
     this.camera.position.set(0, 5, 24);
@@ -240,7 +242,7 @@ export class ThreeConductor {
   private onContextRestored = (): void => {
     console.info('[ThreeConductor] WebGL Context Restored: re-initializing WebGL pipeline');
     this.isContextLost = false;
-    this.renderer.setSize(this.width, this.height);
+    this.renderer.setSize(this.width, this.height, false);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.precompileShaders();
     this.shadowNeedsUpdate = true;
@@ -275,7 +277,7 @@ export class ThreeConductor {
     this.height = this.canvas.clientHeight || window.innerHeight;
     this.camera.aspect = this.width / (this.height || 1);
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(this.width, this.height);
+    this.renderer.setSize(this.width, this.height, false);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.shadowNeedsUpdate = true;
   };
@@ -295,6 +297,7 @@ export class ThreeConductor {
     this.currentProgress = this.scrollProgress;
     this.shadowNeedsUpdate = true;
     this.renderCinematicSequence(this.currentProgress, 0);
+    this.onBeforeRender?.(this.currentProgress);
     this.scene.updateMatrixWorld(true);
     this.camera.updateMatrixWorld(true);
     if (this.onFrameProgress) {
@@ -311,6 +314,7 @@ export class ThreeConductor {
 
   public updateHorizonProfile(hm: HorizonManager): void {
     this.surface.updateHorizonWall(hm);
+    this.skyDome.updateHorizon(hm.getProfile());
     this.shadowNeedsUpdate = true;
   }
 
@@ -348,7 +352,8 @@ export class ThreeConductor {
     }
 
     // Dynamic shadow updates: only when craft or light vectors actively change
-    const hasProgressMoved = Math.abs(this.currentProgress - this.lastRenderedProgress) > 0.0001;
+    // Render the final settled shadow at the exact p too; a threshold can retain a history-dependent shadow.
+    const hasProgressMoved = this.currentProgress !== this.lastRenderedProgress;
     const isShadowPhase = this.currentProgress < 0.38 || (this.currentProgress >= 0.60 && this.currentProgress <= 0.86);
 
     if (hasProgressMoved && isShadowPhase) {
@@ -359,6 +364,7 @@ export class ThreeConductor {
     }
 
     this.renderCinematicSequence(this.currentProgress, timeMs);
+    this.onBeforeRender?.(this.currentProgress);
     this.renderer.render(this.scene, this.camera);
     this.lastRenderedProgress = this.currentProgress;
 
@@ -389,18 +395,18 @@ export class ThreeConductor {
     // Hard vacuum lighting transition (harsh contrast, near-zero ambient, pure solar key)
     if (p < 0.55) {
       const atmoTrans = seg(p, 0.12, 0.35);
-      this.atmosphere.ambientLight.color.setHex(0xdde5f5);
+      this.atmosphere.ambientLight.color.setHex(0xece8dd);
       this.atmosphere.ambientLight.intensity = THREE.MathUtils.lerp(0.55, 0.18, atmoTrans);
-      this.atmosphere.directionalSun.color.setHex(0xffffff);
+      this.atmosphere.directionalSun.color.setHex(0xece8dd);
       this.atmosphere.directionalSun.intensity = THREE.MathUtils.lerp(2.5, 3.5, atmoTrans);
       this.atmosphere.directionalSun.position.set(35, 45, 25);
       this.atmosphere.rimLight.intensity = (1 - seg(p, 0.20, 0.45)) * 0.8;
     } else {
       // Hard vacuum lunar phase: zero atmosphere, cool earthshine tint, intense solar beam
       const moonTrans = seg(p, 0.55, 0.65);
-      this.atmosphere.ambientLight.color.setHex(0x1a2639);
+      this.atmosphere.ambientLight.color.setHex(0x8f8b80);
       this.atmosphere.ambientLight.intensity = THREE.MathUtils.lerp(0.18, 0.04, moonTrans);
-      this.atmosphere.directionalSun.color.setHex(0xfffdf8);
+      this.atmosphere.directionalSun.color.setHex(0xece8dd);
       this.atmosphere.directionalSun.intensity = THREE.MathUtils.lerp(3.5, 4.5, moonTrans);
       if (p < 0.86) {
         // Low grazing polar sunlight angle during descent

@@ -1,5 +1,4 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
-import { Radio } from 'lucide-react';
 import { getMissionTelemetry } from '../../ephemeris/telemetryConductor';
 
 export interface ScrollTelemetryHudHandle {
@@ -53,10 +52,10 @@ export const ScrollTelemetryHud = forwardRef<ScrollTelemetryHudHandle, ScrollTel
 
       if (lastDescentRef.current !== tel.isDescent) {
         if (altLabelRef.current) {
-          altLabelRef.current.textContent = tel.isDescent ? 'Altitude to Surface' : 'Mission Altitude';
+          altLabelRef.current.textContent = tel.isDescent ? 'Altitude to surface' : 'Illustrative altitude';
         }
         if (velLabelRef.current) {
-          velLabelRef.current.textContent = tel.isDescent ? 'Descent Velocity' : 'Orbital Velocity';
+          velLabelRef.current.textContent = tel.isDescent ? 'Descent speed' : 'Illustrative speed';
         }
         lastDescentRef.current = tel.isDescent;
       }
@@ -87,45 +86,12 @@ export const ScrollTelemetryHud = forwardRef<ScrollTelemetryHudHandle, ScrollTel
           display: isInitiallyVisible ? 'block' : 'none',
           opacity: isInitiallyVisible ? 1 : 0
         }}
-        className="fixed top-4 left-4 z-20 pointer-events-none select-none text-white font-mono text-xs transition-opacity duration-150"
+        className="story-telemetry"
       >
-        <div className="p-3 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/60 shadow-xl space-y-1.5 min-w-[260px]">
-          <div className="flex items-center justify-between text-[10px] text-blue-400 font-bold uppercase tracking-wider">
-            <span className="flex items-center gap-1.5">
-              <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span>Telemetry Uplink</span>
-            </span>
-            <span
-              ref={beatTextRef}
-              className="px-1.5 py-0.2 rounded bg-blue-900/40 text-blue-300 border border-blue-700/50"
-            >
-              Beat {initTel.beatIndex} / 8
-            </span>
-          </div>
-
-          <div ref={stageTextRef} className="text-xs font-sans font-bold text-slate-100">
-            {initTel.stageName}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-700/60 text-[11px]">
-            <div>
-              <span ref={altLabelRef} className="text-slate-400 text-[10px] block">
-                {initTel.isDescent ? 'Altitude to Surface' : 'Mission Altitude'}
-              </span>
-              <span ref={altValRef} className="font-bold text-sky-400">
-                {initTel.altitudeStr}
-              </span>
-            </div>
-            <div>
-              <span ref={velLabelRef} className="text-slate-400 text-[10px] block">
-                {initTel.isDescent ? 'Descent Velocity' : 'Orbital Velocity'}
-              </span>
-              <span ref={velValRef} className="font-bold text-amber-400">
-                {initTel.velocityStr}
-              </span>
-            </div>
-          </div>
-        </div>
+        <div className="story-readout-heading"><span>Illustrative flight readout</span><span ref={beatTextRef}>Beat {initTel.beatIndex} / 8</span></div>
+        <div ref={stageTextRef} className="story-stage">{initTel.stageName}</div>
+        <dl className="story-numbers"><div><dt ref={altLabelRef}>{initTel.isDescent ? 'Altitude to surface' : 'Illustrative altitude'}</dt><dd ref={altValRef}>{initTel.altitudeStr}</dd></div>
+          <div><dt ref={velLabelRef}>{initTel.isDescent ? 'Descent speed' : 'Illustrative speed'}</dt><dd ref={velValRef}>{initTel.velocityStr}</dd></div></dl>
       </div>
     );
   }

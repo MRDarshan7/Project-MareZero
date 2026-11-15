@@ -44,12 +44,9 @@ export const MissionCaptionPill = forwardRef<MissionCaptionPillHandle, MissionCa
       <div
         ref={containerRef}
         style={{ display: isInitiallyVisible ? 'flex' : 'none' }}
-        className="fixed bottom-6 left-0 right-0 z-20 pointer-events-none justify-center px-4 select-none animate-in fade-in duration-200"
+        className="mission-caption"
       >
-        <div className="px-4 py-2 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-700/60 shadow-xl text-xs sm:text-sm font-medium font-sans text-slate-100 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
-          <span ref={captionTextRef}>{initTel.caption}</span>
-        </div>
+        <span ref={captionTextRef}>{initTel.caption}</span>
       </div>
     );
   }

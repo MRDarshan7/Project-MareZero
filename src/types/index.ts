@@ -9,7 +9,8 @@ export interface LandingSite {
   lightingConditions: string;
   communicationConditions: string;
   scienceTarget: string;
-  isApproximateTerrain?: boolean; // True if synthetic approximation; false if raw LOLA DEM
+  isApproximateTerrain?: boolean; // Legacy flag; never implies any external dataset.
+  terrainSource?: 'approximate' | 'user' | 'flat-fallback';
   horizonProfile?: number[]; // 360 degrees (0 to 359, az=0 North, az=90 East)
 }
 
@@ -67,9 +68,9 @@ export interface SiteMetrics {
   longestContinuousEarthLosHours: number;
   longestContinuousBlackoutHours: number;
   
-  // Power & Mission Viability score
+  // Illustrative sunlight-only heuristic (not a power-system model).
   powerScore: number;                  // 0 to 100
-  powerRating: 'EXCELLENT' | 'HIGH' | 'MODERATE' | 'MARGINAL' | 'CRITICAL';
+  powerRating: 'High' | 'Mixed' | 'Low';
   powerExplanation: string;
   commRating: 'CONTINUOUS' | 'INTERMITTENT' | 'RELAY_REQUIRED' | 'OCCULTED';
   
@@ -87,21 +88,25 @@ export interface DeltaComparison {
 
 export type SolarArrayArchitecture = 'vertical' | 'horizontal';
 
+export type VisibilityEvent = {
+  state: 'event';
+  type: 'sunset' | 'sunrise' | 'earthset' | 'earthrise';
+  hoursRemaining: number;
+  eventDate: Date;
+  formattedCountdown: string;
+  windowEnd: Date;
+} | {
+  state: 'always_up' | 'never_up';
+  type: null;
+  hoursRemaining: null;
+  eventDate: null;
+  formattedCountdown: string;
+  windowEnd: Date;
+};
+
 export interface CountdownEvents {
-  nextSolarEvent: {
-    type: 'sunset' | 'sunrise';
-    hoursRemaining: number;
-    eventDate: Date;
-    formattedCountdown: string;
-  };
-  nextEarthEvent: {
-    type: 'earthset' | 'earthrise';
-    hoursRemaining: number;
-    eventDate: Date;
-    formattedCountdown: string;
-    isContinuous: boolean;
-    isPermanentlyOcculted: boolean;
-  };
+  nextSolarEvent: VisibilityEvent;
+  nextEarthEvent: VisibilityEvent;
 }
 
 export interface LaunchSlipScenario {

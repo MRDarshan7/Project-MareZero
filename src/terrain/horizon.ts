@@ -6,15 +6,10 @@
 
 export class HorizonManager {
   private profile: number[]; // 360 values, degrees
-  private rayCache = new Map<string, boolean>();
 
   constructor(profile?: number[]) {
-    if (profile && profile.length === 360) {
-      this.profile = [...profile];
-    } else {
-      // Default flat horizon
-      this.profile = new Array(360).fill(0.5);
-    }
+    this.profile = new Array(360).fill(0.5);
+    if (profile !== undefined) this.setProfile(profile);
   }
 
   /**
@@ -24,8 +19,10 @@ export class HorizonManager {
     if (profile.length !== 360) {
       throw new Error(`Profile must contain exactly 360 elevation values (received ${profile.length})`);
     }
-    this.profile = profile.map(v => Math.max(0, Number(v) || 0));
-    this.rayCache.clear();
+    if (profile.some(v => !Number.isFinite(v) || v < -15 || v > 45)) {
+      throw new Error('Horizon values must be finite numbers between -15 and 45 degrees.');
+    }
+    this.profile = [...profile];
   }
 
   /**
@@ -53,19 +50,11 @@ export class HorizonManager {
   /**
    * Check whether a body with given azimuth and elevation is blocked by terrain
    * Returns true if blocked (or below horizon), false if in clear line-of-sight.
-   * Memoized with integer-quantized fast cache.
+   * Evaluate exactly: quantized angle caching can change visibility near the horizon.
    */
   public isBlocked(azimuthDeg: number, elevationDeg: number): boolean {
-    const key = `${Math.round(azimuthDeg * 10)}_${Math.round(elevationDeg * 10)}`;
-    const cached = this.rayCache.get(key);
-    if (cached !== undefined) return cached;
-
     const horizonElev = this.getElevationAtAzimuth(azimuthDeg);
-    const blocked = elevationDeg <= horizonElev;
-    if (this.rayCache.size < 4096) {
-      this.rayCache.set(key, blocked);
-    }
-    return blocked;
+    return elevationDeg <= horizonElev;
   }
 
   /**

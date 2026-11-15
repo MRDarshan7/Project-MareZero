@@ -1,45 +1,26 @@
 import { describe, it, expect } from 'vitest';
+import * as Astronomy from 'astronomy-engine';
 import { EphemerisEngine } from '../engine';
 import { HORIZONS_BENCHMARKS } from '../horizonsValidation';
 import { HorizonManager } from '../../terrain/horizon';
 import { CURATED_SITES } from '../../terrain/lolaData';
+import { LandingSite } from '../../types';
+
+const angularDifference = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
+const DATES_2026 = Array.from({ length: 12 }, (_, month) => new Date(Date.UTC(2026, month, 15, 12)));
+const testSite: LandingSite = {
+  id: 'test-site', name: 'Test site', category: 'Custom', lat: 0, lon: 0, elevationKm: 0,
+  description: '', lightingConditions: '', communicationConditions: '', scienceTarget: ''
+};
 
 describe('Ephemeris Engine Validation against NASA JPL Horizons', () => {
-  it('should match JPL Horizons Sun and Earth topocentric positions within tolerance', () => {
-    for (const b of HORIZONS_BENCHMARKS) {
-      const site = {
-        id: 'test-site',
-        name: b.siteName,
-        category: 'Custom' as const,
-        lat: b.lat,
-        lon: b.lon,
-        elevationKm: b.elevationKm,
-        description: '',
-        lightingConditions: '',
-        communicationConditions: '',
-        scienceTarget: ''
-      };
-
-      const date = new Date(b.epochIso);
-      const res = EphemerisEngine.calculatePosition(site, date);
-
-      const sunAzDiff = Math.min(
-        Math.abs(res.sun.az - b.expectedSun.az),
-        360 - Math.abs(res.sun.az - b.expectedSun.az)
-      );
-      const sunElDiff = Math.abs(res.sun.el - b.expectedSun.el);
-
-      expect(sunElDiff).toBeLessThanOrEqual(b.expectedSun.toleranceDeg);
-      expect(sunAzDiff).toBeLessThanOrEqual(b.expectedSun.toleranceDeg);
-
-      const earthAzDiff = Math.min(
-        Math.abs(res.earth.az - b.expectedEarth.az),
-        360 - Math.abs(res.earth.az - b.expectedEarth.az)
-      );
-      const earthElDiff = Math.abs(res.earth.el - b.expectedEarth.el);
-
-      expect(earthElDiff).toBeLessThanOrEqual(b.expectedEarth.toleranceDeg);
-      expect(earthAzDiff).toBeLessThanOrEqual(b.expectedEarth.toleranceDeg);
+  it.each(HORIZONS_BENCHMARKS)('matches $siteName at $epochIso within 0.1 degrees', b => {
+    const site = { ...testSite, lat: b.lat, lon: b.lon, elevationKm: b.elevationKm };
+    const res = EphemerisEngine.calculatePosition(site, new Date(b.epochIso));
+    for (const [actual, expected] of [[res.sun, b.expectedSun], [res.earth, b.expectedEarth]] as const) {
+      expect(expected.toleranceDeg).toBeLessThanOrEqual(0.1);
+      expect(angularDifference(actual.az, expected.az)).toBeLessThanOrEqual(expected.toleranceDeg);
+      expect(Math.abs(actual.el - expected.el)).toBeLessThanOrEqual(expected.toleranceDeg);
     }
   });
 
@@ -51,6 +32,82 @@ describe('Ephemeris Engine Validation against NASA JPL Horizons', () => {
 
     expect(pos.earth.el).toBeLessThan(-30);
     expect(pos.earth.isBlocked).toBe(true);
+  });
+});
+
+describe('Lunar frame and multi-date physical checks', () => {
+  it.each(DATES_2026)('matches the Libration sub-Earth self-check within 0.05 degrees on %s', date => {
+    const pos = EphemerisEngine.calculatePosition(testSite, date);
+    // Libration is used only as a self-check; engine positions come from rotated vectors.
+    const lib = Astronomy.Libration(date);
+    expect(Math.abs(pos.libration.earthSubLat - lib.elat)).toBeLessThanOrEqual(0.05);
+    expect(angularDifference(pos.libration.earthSubLon, lib.elon)).toBeLessThanOrEqual(0.05);
+  });
+
+  it.each(['2026-01-01', '2026-04-01', '2026-07-01', '2026-10-01'])(
+    'aligns Sun and Earth at full moon and opposes them at new moon after %s', start => {
+      for (const phase of [180, 0]) {
+        const event = Astronomy.SearchMoonPhase(phase, new Date(`${start}T00:00:00Z`), 35);
+        expect(event).not.toBeNull();
+        const pos = EphemerisEngine.calculatePosition(testSite, event!.date);
+        const separation = angularDifference(pos.subSolar.lon, pos.libration.earthSubLon);
+        // Phase sanity bounds from the plan allow latitude/orbital geometry at conjunction.
+        expect(Math.abs(separation - (phase === 180 ? 0 : 180))).toBeLessThanOrEqual(phase === 180 ? 5 : 10);
+      }
+    }
+  );
+
+  it.each(DATES_2026)('satisfies south-pole elevation and parallax analytics on %s', date => {
+    const pos = EphemerisEngine.calculatePosition({ ...testSite, lat: -90 }, date);
+    expect(Math.abs(pos.sun.el + pos.subSolar.lat)).toBeLessThanOrEqual(0.3);
+    expect(Math.abs(pos.sun.el)).toBeLessThanOrEqual(1.6);
+    expect(Math.abs(pos.earth.el - (-pos.libration.earthSubLat - 0.26))).toBeLessThanOrEqual(0.3);
+  });
+
+  it('places the Sun about 10.7 degrees above the horizon at Apollo 11 touchdown', () => {
+    const pos = EphemerisEngine.calculatePosition(
+      { ...testSite, lat: 0.674, lon: 23.473 }, new Date('1969-07-20T20:17:00Z')
+    );
+    expect(Math.abs(pos.sun.el - 10.7)).toBeLessThanOrEqual(0.5);
+  });
+
+  it.each(DATES_2026)('uses the Moon-to-Sun norm for AU distance on %s', date => {
+    const moon = Astronomy.GeoVector(Astronomy.Body.Moon, date, false);
+    const sun = Astronomy.GeoVector(Astronomy.Body.Sun, date, false);
+    const distance = Math.hypot(sun.x - moon.x, sun.y - moon.y, sun.z - moon.z);
+    expect(EphemerisEngine.calculatePosition(testSite, date).sun.distance).toBe(Number(distance.toFixed(4)));
+  });
+
+  it.each(DATES_2026)('matches independent spherical topocentric geometry at polar and equatorial sites on %s', date => {
+    for (const site of [{ ...testSite, lat: -89.78, lon: 129.2, elevationKm: 1.35 },
+                        { ...testSite, lat: 0.674, lon: 23.473, elevationKm: -1.4 }]) {
+      const pos = EphemerisEngine.calculatePosition(site, date);
+      const moon = Astronomy.GeoVector(Astronomy.Body.Moon, date, false);
+      const sun = Astronomy.GeoVector(Astronomy.Body.Sun, date, false);
+      const sunDistance = Math.hypot(sun.x - moon.x, sun.y - moon.y, sun.z - moon.z) * Astronomy.KM_PER_AU;
+      // Check the local projection independently, using the engine's computed subpoints.
+      // Libration's approximate subpoint is checked separately above; mixing frames here
+      // amplifies its small angular differences when the Earth is high in the sky.
+      // cos(zenith distance) = sin(phi)sin(delta) + cos(phi)cos(delta)cos(delta-lon).
+      // Subtract observer radius only from the vertical component to include parallax.
+      for (const [body, lat, lon, distance] of [
+        [pos.sun, pos.subSolar.lat, pos.subSolar.lon, sunDistance],
+        [pos.earth, pos.libration.earthSubLat, pos.libration.earthSubLon,
+          Math.hypot(moon.x, moon.y, moon.z) * Astronomy.KM_PER_AU]
+      ] as const) {
+        const phi = site.lat * Math.PI / 180;
+        const delta = lat * Math.PI / 180;
+        const hourAngle = (lon - site.lon) * Math.PI / 180;
+        const cosZenith = Math.sin(phi) * Math.sin(delta) + Math.cos(phi) * Math.cos(delta) * Math.cos(hourAngle);
+        const horizontal = distance * Math.sqrt(Math.max(0, 1 - cosZenith ** 2));
+        const vertical = distance * cosZenith - (1737.4 + site.elevationKm);
+        const elevation = Math.atan2(vertical, horizontal) * 180 / Math.PI;
+        const azimuth = (Math.atan2(Math.sin(hourAngle),
+          Math.cos(phi) * Math.tan(delta) - Math.sin(phi) * Math.cos(hourAngle)) * 180 / Math.PI + 360) % 360;
+        expect(Math.abs(body.el - elevation)).toBeLessThanOrEqual(0.05);
+        expect(angularDifference(body.az, azimuth)).toBeLessThanOrEqual(0.05);
+      }
+    }
   });
 });
 
@@ -87,15 +144,23 @@ describe('Terrain Horizon & Shadow Blocking Logic', () => {
   });
 });
 
-describe('Site Metrics & Power Viability Score', () => {
-  it('should compute valid 0-100 power viability score and operational windows', () => {
-    const shackleton = CURATED_SITES.find(s => s.id === 'shackleton-connecting-ridge')!;
+describe('Site metrics and illustrative sunlight outlook', () => {
+  it('computes a bounded sunlight outlook and operational windows', () => {
+    // Synthetic flat equator: a full synodic cycle has approximately equal day/night.
+    // A polar site's illumination fraction is seasonal and depends on its horizon;
+    // the old >20% Shackleton assumption was based on the incorrect Sun position.
+    const equator = {
+      ...CURATED_SITES.find(s => s.id === 'apollo-11')!,
+      id: 'metrics-flat-equator', lat: 0, lon: 0, elevationKm: 0,
+      horizonProfile: new Array(360).fill(0)
+    };
     const date = new Date('2026-07-03T12:00:00Z');
-    const metrics = EphemerisEngine.computeSiteMetrics(shackleton, date);
+    const metrics = EphemerisEngine.computeSiteMetrics(equator, date);
 
     expect(metrics.powerScore).toBeGreaterThanOrEqual(0);
     expect(metrics.powerScore).toBeLessThanOrEqual(100);
-    expect(metrics.illuminationFraction).toBeGreaterThan(0.2); // Accounting for high polar rim blockage
+    expect(metrics.illuminationFraction).toBeGreaterThan(0.2);
+    expect(Math.abs(metrics.illuminationFraction - 0.5)).toBeLessThanOrEqual(0.02);
     expect(metrics.windows.length).toBeGreaterThan(0);
     expect(typeof metrics.powerExplanation).toBe('string');
   });

@@ -10,12 +10,13 @@ export function exportEphemerisCsv(
   // Header metadata
   rows.push(`# Lunar Landing Site Navigator - Ephemeris & Telemetry Export`);
   rows.push(`# Site: ${site.name} (${site.lat}° lat, ${site.lon}° lon, ${site.elevationKm} km elev)`);
-  rows.push(`# Illumination: ${(metrics.illuminationFraction * 100).toFixed(1)}% | Earth Visibility: ${(metrics.earthVisibilityFraction * 100).toFixed(1)}% | Power Score: ${metrics.powerScore}/100`);
+  rows.push(`# Illumination: ${(metrics.illuminationFraction * 100).toFixed(1)}% | Earth Visibility: ${(metrics.earthVisibilityFraction * 100).toFixed(1)}% | Sunlight outlook (illustrative): ${metrics.powerScore}/100`);
+  rows.push(`# Terrain: ${site.terrainSource === 'user' ? 'User-supplied terrain (not independently checked)' : 'Approximate terrain (synthetic or flat fallback)'}`);
   rows.push('');
 
   // Column Headers
   rows.push([
-    'Mission_Day',
+    'Elapsed_Day',
     'UTC_Timestamp',
     'Sun_Azimuth_deg',
     'Sun_Elevation_deg',

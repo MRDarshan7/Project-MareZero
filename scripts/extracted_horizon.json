@@ -1,13 +1,14 @@
 {
   "metadata": {
-    "generator": "NASA LOLA LDEM Raycaster v1.0",
-    "sourceDataset": "LRO LOLA Polar DEM LDEM_75S_120M",
+    "generator": "Synthetic horizon demonstration v1",
+    "sourceDataset": "Invented analytic terrain; no measured dataset",
     "latitude": -89.78,
     "longitude": 129.2,
     "elevationKm": 1.35,
     "rays": 360,
     "angularStepDeg": 1,
-    "timestamp": "2026-11-11T08:19:14.446Z"
+    "timestamp": "2026-11-11T08:19:14.446Z",
+    "source": "synthetic"
   },
   "horizonProfile": [
     87.93,

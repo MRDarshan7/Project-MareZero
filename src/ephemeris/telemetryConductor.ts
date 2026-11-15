@@ -24,11 +24,11 @@ export function getMissionTelemetry(p: number): MissionTelemetry {
   const prog = clamp(p);
 
   let beatIndex = 0;
-  let beatName = 'Hero & Launch Pad';
-  let stageName = 'Stage 0: Pre-Launch';
+  let beatName = 'Launch pad';
+  let stageName = 'On the pad';
   let altitudeKm = 0;
   let velocityKmh = 0;
-  let caption = 'Mission Control: Pre-Launch Telemetry Verified';
+  let caption = 'Launch story: preparation';
   let isDescent = false;
   let isLanded = false;
   let isDashboard = false;
@@ -37,72 +37,72 @@ export function getMissionTelemetry(p: number): MissionTelemetry {
     // 0-8%: Hero
     beatIndex = 0;
     beatName = 'Hero';
-    stageName = 'Stage 0: Pad Readiness';
+    stageName = 'On the pad';
     altitudeKm = 0;
     velocityKmh = 0;
-    caption = 'Mission Control: Ready for Launch';
+    caption = 'On the pad, ready to begin';
   } else if (prog < 0.18) {
     // 8-18%: Liftoff
     beatIndex = 1;
-    beatName = 'Liftoff & Ignition';
-    stageName = 'Stage 1: Booster Ascent';
+    beatName = 'Liftoff';
+    stageName = 'Booster ascent';
     const t = (prog - 0.08) / 0.10;
     altitudeKm = 0.001 + t * t * 15.0; // 0 to 15 km
     velocityKmh = t * 2400; // 0 to 2,400 km/h
-    caption = 'Liftoff · Main Engine Ignition & Hold-Down Release';
+    caption = 'Liftoff and release from the pad';
   } else if (prog < 0.35) {
     // 18-35%: Ascent
     beatIndex = 2;
-    beatName = 'Atmospheric Ascent';
-    stageName = 'Stage 1: Transonic Max-Q';
+    beatName = 'Ascent';
+    stageName = 'Booster ascent';
     const t = (prog - 0.18) / 0.17;
     altitudeKm = 15.0 + t * 85.0; // 15 to 100 km (Kármán line)
     velocityKmh = 2400 + t * 7600; // 2,400 to 10,000 km/h
-    caption = 'Climbing through upper atmosphere · Sky fading to space';
+    caption = 'Climbing toward space';
   } else if (prog < 0.45) {
     // 35-45%: Booster MECO & Separation
     beatIndex = 3;
-    beatName = 'Booster Separation';
-    stageName = 'Stage 2: Vacuum Ignition';
+    beatName = 'Booster separation';
+    stageName = 'Upper stage';
     const t = (prog - 0.35) / 0.10;
     altitudeKm = 100.0 + t * 120.0; // 100 to 220 km
     velocityKmh = 10000 + t * 12000; // 10,000 to 22,000 km/h
-    caption = 'Booster MECO & separation · Upper stage vacuum ignition';
+    caption = 'The booster separates; the upper stage continues';
   } else if (prog < 0.55) {
-    // 45-55%: Fairing Jettison
+    // 45-55%: Fairing separation
     beatIndex = 4;
-    beatName = 'Fairing Jettison';
-    stageName = 'Stage 2: Translunar Insertion';
+    beatName = 'Fairing separation';
+    stageName = 'Toward the Moon';
     const t = (prog - 0.45) / 0.10;
     altitudeKm = 220.0 + t * 384180.0; // 220 km to 384,400 km (Translunar)
     velocityKmh = 22000 + (1 - t * 0.4) * 6000; // TLI burn velocity
-    caption = 'Payload fairing jettison · Lunar lander revealed';
+    caption = 'The fairing opens to reveal the lander';
   } else if (prog < 0.62) {
-    // 55-62%: Lander Release & Deployment
+    // 55-62%: Lander release
     beatIndex = 5;
-    beatName = 'Lander Release & Deployment';
-    stageName = 'Translunar Coast';
+    beatName = 'Lander release';
+    stageName = 'Coasting toward the Moon';
     const t = (prog - 0.55) / 0.07;
     altitudeKm = 384400.0 - t * 350000.0; // Distance to Moon closing
     velocityKmh = 25600 - t * 18000;
-    caption = 'Lander release · Solar arrays & landing gear deploying';
+    caption = 'The lander separates and unfolds';
   } else if (prog < 0.80) {
     // 62-80%: Approach & Powered Descent
     beatIndex = 6;
-    beatName = 'Lunar Powered Descent';
-    stageName = 'Powered Descent Initiation (PDI)';
+    beatName = 'Lunar descent';
+    stageName = 'Descending';
     isDescent = true;
     const t = (prog - 0.62) / 0.18;
     // Descent from 15,000 meters to 150 meters
     altitudeKm = (15.0 * Math.pow(1 - t, 1.8));
     // Velocity strictly monotonically decreasing from 5,800 km/h to 120 km/h
     velocityKmh = 5800.0 * Math.pow(1 - t, 1.4) + 120.0;
-    caption = 'Powered descent to South Pole · Moon surface rising';
+    caption = 'The lander descends toward the surface';
   } else if (prog < 0.86) {
     // 80-86%: Touchdown
     beatIndex = 7;
-    beatName = 'South Pole Touchdown';
-    stageName = 'Terminal Guidance & Touchdown';
+    beatName = 'Touchdown';
+    stageName = 'Approaching the surface';
     isDescent = true;
     const t = (prog - 0.80) / 0.06;
     // Altitude descends from 150 meters to 0
@@ -111,20 +111,20 @@ export function getMissionTelemetry(p: number): MissionTelemetry {
     velocityKmh = Math.max(0, 120.0 * (1 - t));
     if (t >= 0.8) {
       isLanded = true;
-      caption = 'Touchdown confirmed · Regolith dust settling at 89.8°S';
+      caption = 'The lander reaches the surface';
     } else {
-      caption = 'Terminal descent · Ballistic dust billowing';
+      caption = 'Approaching the landing site';
     }
   } else {
-    // 86-100%: Sky-Dome Dashboard
+    // 86-100%: Sky dome
     beatIndex = 8;
-    beatName = 'Sky-Dome Dashboard';
-    stageName = 'Surface Secured · Telemetry Live';
+    beatName = 'Sky dome';
+    stageName = 'On the surface';
     altitudeKm = 0;
     velocityKmh = 0;
     isLanded = true;
     isDashboard = true;
-    caption = 'Zooming out to 3D Sky-Dome Telemetry Environment';
+    caption = 'The landing site becomes a sky instrument';
   }
 
   // Format strings
