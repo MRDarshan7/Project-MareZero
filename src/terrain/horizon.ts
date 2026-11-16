@@ -6,6 +6,7 @@
 
 export class HorizonManager {
   private profile: number[]; // 360 values, degrees
+  private profileKey: string = '';
 
   constructor(profile?: number[]) {
     this.profile = new Array(360).fill(0.5);
@@ -23,6 +24,19 @@ export class HorizonManager {
       throw new Error('Horizon values must be finite numbers between -15 and 45 degrees.');
     }
     this.profile = [...profile];
+    this.profileKey = '';
+  }
+
+  /**
+   * Fast memoization fingerprint for the horizon profile
+   */
+  public getKey(): string {
+    if (!this.profileKey) {
+      let sum = 0;
+      for (let i = 0; i < 360; i += 30) sum += this.profile[i];
+      this.profileKey = `${this.profile[0]}_${this.profile[90]}_${this.profile[180]}_${this.profile[270]}_${sum.toFixed(2)}`;
+    }
+    return this.profileKey;
   }
 
   /**

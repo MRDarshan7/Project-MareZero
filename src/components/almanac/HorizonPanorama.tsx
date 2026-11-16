@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useId, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { EphemerisSample } from '../../types';
 import { TopocentricResult } from '../../ephemeris/engine';
 import { HorizonManager } from '../../terrain/horizon';
@@ -14,23 +14,49 @@ interface Props {
 export const HorizonPanorama = forwardRef<SVGSVGElement, Props>(({ position, horizon, trail, siteName, compact = false }, ref) => {
   const id = useId().replace(/:/g, '');
   const scrollContainer = useRef<HTMLDivElement>(null);
+  const rafId = useRef<number | null>(null);
   const [visibleRange, setVisibleRange] = useState({ left: 0, right: 1200 });
   const width = compact ? 800 : 1200, height = compact ? 360 : 300;
   const left = 52, right = width - 40, top = 34, bottom = height - 62;
-  const profile = horizon.getProfile();
-  const elevations = trail.flatMap(s => [s.sun.el, s.earth.el]);
-  const low = Math.min(-3, Math.floor(Math.min(position.sun.el, position.earth.el, ...elevations, ...profile) - 3));
-  const high = Math.max(15, Math.ceil(Math.max(position.sun.el, position.earth.el, ...elevations, ...profile) + 4));
-  const x = (az: number) => left + az / 360 * (right - left);
-  const y = (el: number) => bottom - (el - low) / (high - low) * (bottom - top);
+
+  const profile = useMemo(() => horizon.getProfile(), [horizon]);
+  const elevations = useMemo(() => trail.flatMap(s => [s.sun.el, s.earth.el]), [trail]);
+  const { low, high } = useMemo(() => {
+    const l = Math.min(-3, Math.floor(Math.min(position.sun.el, position.earth.el, ...elevations, ...profile) - 3));
+    const h = Math.max(15, Math.ceil(Math.max(position.sun.el, position.earth.el, ...elevations, ...profile) + 4));
+    return { low: l, high: h };
+  }, [position.sun.el, position.earth.el, elevations, profile]);
+
+  const x = useCallback((az: number) => left + (az / 360) * (right - left), [left, right]);
+  const y = useCallback((el: number) => bottom - ((el - low) / (high - low)) * (bottom - top), [bottom, low, high, top]);
   const exaggeration = ((bottom - top) / (high - low)) / ((right - left) / 360);
-  const updateVisibleRange = () => {
+
+  const updateVisibleRange = useCallback(() => {
     const container = scrollContainer.current;
-    if (!container) return;
-    if (!container.scrollWidth || !container.clientWidth) return;
+    if (!container || !container.scrollWidth || !container.clientWidth) return;
     const factor = container.scrollWidth / width;
-    setVisibleRange({ left: container.scrollLeft / factor, right: (container.scrollLeft + container.clientWidth) / factor });
-  };
+    const newLeft = container.scrollLeft / factor;
+    const newRight = (container.scrollLeft + container.clientWidth) / factor;
+    setVisibleRange(prev => {
+      if (Math.abs(prev.left - newLeft) < 1 && Math.abs(prev.right - newRight) < 1) return prev;
+      return { left: newLeft, right: newRight };
+    });
+  }, [width]);
+
+  const handleScroll = useCallback(() => {
+    if (rafId.current !== null) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      updateVisibleRange();
+    });
+  }, [updateVisibleRange]);
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
+
   useEffect(() => {
     const container = scrollContainer.current;
     if (!container) return;
@@ -47,16 +73,30 @@ export const HorizonPanorama = forwardRef<SVGSVGElement, Props>(({ position, hor
     const resize = new ResizeObserver(recenter);
     resize.observe(container);
     return () => resize.disconnect();
-  }, [position.sun.az, position.earth.az, compact]);
-  const terrain = profile.map((el, i) => `${x(i)},${y(el)}`).join(' ') + ` ${x(360)},${y(profile[0])}`;
-  const ticks = Array.from({ length: 5 }, (_, i) => low + (high - low) * i / 4);
-  const path = (body: 'sun' | 'earth') => trail.map((s, i) => {
+  }, [position.sun.az, position.earth.az, compact, width, x, updateVisibleRange]);
+
+  const terrain = useMemo(() => {
+    return profile.map((el, i) => `${x(i)},${y(el)}`).join(' ') + ` ${x(360)},${y(profile[0])}`;
+  }, [profile, x, y]);
+
+  const ticks = useMemo(() => Array.from({ length: 5 }, (_, i) => low + ((high - low) * i) / 4), [low, high]);
+
+  const sunPath = useMemo(() => trail.map((s, i) => {
     const previous = trail[i - 1];
-    const jump = previous && Math.abs(s[body].az - previous[body].az) > 180;
-    return `${i === 0 || jump ? 'M' : 'L'}${x(s[body].az)},${y(s[body].el)}`;
-  }).join(' ');
+    const jump = previous && Math.abs(s.sun.az - previous.sun.az) > 180;
+    return `${i === 0 || jump ? 'M' : 'L'}${x(s.sun.az)},${y(s.sun.el)}`;
+  }).join(' '), [trail, x, y]);
+
+  const earthPath = useMemo(() => trail.map((s, i) => {
+    const previous = trail[i - 1];
+    const jump = previous && Math.abs(s.earth.az - previous.earth.az) > 180;
+    return `${i === 0 || jump ? 'M' : 'L'}${x(s.earth.az)},${y(s.earth.el)}`;
+  }).join(' '), [trail, x, y]);
+
+  const paths = { sun: sunPath, earth: earthPath };
+
   const summary = `${siteName}. Sun ${position.sun.el.toFixed(1)} degrees above the flat horizon, direction ${position.sun.az.toFixed(1)} degrees, ${position.sun.isBlocked ? 'hidden' : 'visible'}. Earth ${position.earth.el.toFixed(1)} degrees, direction ${position.earth.az.toFixed(1)} degrees, ${position.earth.isBlocked ? 'hidden' : 'visible'}. Terrain shown is the selected profile.`;
-  return <div ref={scrollContainer} className="panorama-scroll" onScroll={updateVisibleRange} tabIndex={0} aria-label="Scrollable horizon panorama">
+  return <div ref={scrollContainer} className="panorama-scroll" onScroll={handleScroll} tabIndex={0} aria-label="Scrollable horizon panorama">
     <svg ref={ref} id="horizon-panorama" className="panorama" viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title ${id}-description`}>
       <title id={`${id}-title`}>Sun and Earth above the horizon</title>
       <desc id={`${id}-description`}>{summary}</desc>
@@ -79,7 +119,7 @@ export const HorizonPanorama = forwardRef<SVGSVGElement, Props>(({ position, hor
         <polygon points={`${left},${bottom} ${terrain} ${right},${bottom}`} fill="#0C0D0B" />
         <polyline points={terrain} fill="none" stroke="#ECE8DD" strokeOpacity="0.65" strokeWidth="1" />
         <line x1={left} x2={right} y1={y(0)} y2={y(0)} stroke="#8F8B80" strokeOpacity="0.4" strokeDasharray="3 6" />
-        {(['sun', 'earth'] as const).map(body => <path key={body} d={path(body)} fill="none" stroke={body === 'sun' ? '#F2B84B' : '#5FA8D3'} strokeWidth="1.5" strokeOpacity="0.35" strokeDasharray="3 5" />)}
+        {(['sun', 'earth'] as const).map(body => <path key={body} d={paths[body]} fill="none" stroke={body === 'sun' ? '#F2B84B' : '#5FA8D3'} strokeWidth="1.5" strokeOpacity="0.35" strokeDasharray="3 5" />)}
       </g>
       {(['sun', 'earth'] as const).map(body => {
         const point = position[body];

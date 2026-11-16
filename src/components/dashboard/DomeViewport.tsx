@@ -3,37 +3,77 @@ import * as THREE from 'three';
 import { SceneBridge } from '../almanac/SceneBridge';
 import { TopocentricResult } from '../../ephemeris/engine';
 
+const _labelPoint = new THREE.Vector3();
+const CARDINAL_AZ = [0, 90, 180, 270] as const;
+
 export function DomeLabels({ scene, position, story = false }: { scene: SceneBridge; position: TopocentricResult; story?: boolean }) {
   const overlay = useRef<HTMLDivElement>(null);
   const sunLabel = useRef<HTMLSpanElement>(null);
   const earthLabel = useRef<HTMLSpanElement>(null);
   const cardinals = useRef<Array<HTMLSpanElement | null>>([]);
   const factor = useRef<HTMLSpanElement>(null);
+  const labelWidths = useRef({ sun: 100, earth: 100 });
+  const lastExaggeration = useRef<number>(-1);
+
+  // Measure label widths when position changes without layout thrashing during animation frames
+  useEffect(() => {
+    if (sunLabel.current) labelWidths.current.sun = sunLabel.current.offsetWidth || 100;
+    if (earthLabel.current) labelWidths.current.earth = earthLabel.current.offsetWidth || 100;
+  }, [position]);
+
   useEffect(() => {
     if (!scene.conductor) return;
     const conductor = scene.conductor;
-    const point = new THREE.Vector3();
+
     const update = () => {
-      if (!overlay.current) return;
-      const width = overlay.current.clientWidth, height = overlay.current.clientHeight;
-      overlay.current.style.visibility = story && conductor.currentProgress < 0.88 ? 'hidden' : 'visible';
-      for (const [node, marker, offset] of [[sunLabel.current, conductor.skyDome.sunMarker, -28], [earthLabel.current, conductor.skyDome.earthMarker, 26]] as const) {
-        if (!node) continue;
-        marker.getWorldPosition(point); point.project(conductor.camera);
-        const x = (point.x + 1) / 2 * width, y = (1 - point.y) / 2 * height;
-        const labelWidth = node.offsetWidth;
-        node.style.left = Math.max(12, Math.min(width - labelWidth - 12, x - labelWidth / 2)) + 'px';
-        node.style.top = Math.max(12, Math.min(height - 34, y + offset)) + 'px';
+      const host = overlay.current;
+      if (!host) return;
+      const width = host.clientWidth;
+      const height = host.clientHeight;
+      if (!width || !height) return;
+
+      host.style.visibility = story && conductor.currentProgress < 0.88 ? 'hidden' : 'visible';
+
+      // 1. Sun Label
+      if (sunLabel.current) {
+        conductor.skyDome.sunMarker.getWorldPosition(_labelPoint);
+        _labelPoint.project(conductor.camera);
+        const x = ((_labelPoint.x + 1) / 2) * width;
+        const y = ((1 - _labelPoint.y) / 2) * height;
+        const lw = labelWidths.current.sun;
+        sunLabel.current.style.left = Math.max(12, Math.min(width - lw - 12, x - lw / 2)) + 'px';
+        sunLabel.current.style.top = Math.max(12, Math.min(height - 34, y - 28)) + 'px';
       }
-      [0,90,180,270].forEach((az, index) => {
-        const node = cardinals.current[index]; if (!node) return;
-        conductor.skyDome.toCartesian(az, 0, 17.4, point); point.project(conductor.camera);
-        node.style.left = Math.max(10, Math.min(width - 20, (point.x + 1) / 2 * width)) + 'px';
-        node.style.top = Math.max(10, Math.min(height - 20, (1 - point.y) / 2 * height)) + 'px';
-      });
-      if (factor.current) factor.current.textContent = conductor.skyDome.heightExaggeration > 1
-        ? `Heights exaggerated ${conductor.skyDome.heightExaggeration.toFixed(0)}x` : 'Heights at actual scale (1x)';
+
+      // 2. Earth Label
+      if (earthLabel.current) {
+        conductor.skyDome.earthMarker.getWorldPosition(_labelPoint);
+        _labelPoint.project(conductor.camera);
+        const x = ((_labelPoint.x + 1) / 2) * width;
+        const y = ((1 - _labelPoint.y) / 2) * height;
+        const lw = labelWidths.current.earth;
+        earthLabel.current.style.left = Math.max(12, Math.min(width - lw - 12, x - lw / 2)) + 'px';
+        earthLabel.current.style.top = Math.max(12, Math.min(height - 34, y + 26)) + 'px';
+      }
+
+      // 3. Cardinal Direction Markers
+      for (let index = 0; index < 4; index++) {
+        const node = cardinals.current[index];
+        if (!node) continue;
+        conductor.skyDome.toCartesian(CARDINAL_AZ[index], 0, 17.4, _labelPoint);
+        _labelPoint.project(conductor.camera);
+        node.style.left = Math.max(10, Math.min(width - 20, ((_labelPoint.x + 1) / 2) * width)) + 'px';
+        node.style.top = Math.max(10, Math.min(height - 20, ((1 - _labelPoint.y) / 2) * height)) + 'px';
+      }
+
+      // 4. Height Exaggeration Note
+      if (factor.current && conductor.skyDome.heightExaggeration !== lastExaggeration.current) {
+        lastExaggeration.current = conductor.skyDome.heightExaggeration;
+        factor.current.textContent = conductor.skyDome.heightExaggeration > 1
+          ? `Heights exaggerated ${conductor.skyDome.heightExaggeration.toFixed(0)}x` : 'Heights at actual scale (1x)';
+      }
     };
+
     update();
     return scene.subscribeFrame(update);
   }, [scene.conductor, scene.subscribeFrame, position, story]);
@@ -47,11 +87,24 @@ export function DomeLabels({ scene, position, story = false }: { scene: SceneBri
 
 export function DomeViewport({ scene, position }: { scene: SceneBridge; position: TopocentricResult }) {
   const stage = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const host = stage.current;
+    if (!host) return;
+    scene.registerDomeHost(host);
+    return () => {
+      scene.registerDomeHost(null);
+    };
+  }, [scene.registerDomeHost]);
+
   useEffect(() => {
     const host = stage.current;
     if (!host || !scene.conductor) return;
     const resize = new ResizeObserver(() => {
-      if (host.clientWidth && host.clientHeight && host.querySelector('canvas')) scene.conductor?.onResize();
+      if (host.clientWidth && host.clientHeight) {
+        scene.conductor?.onResize();
+        scene.conductor?.ensureAnimationLoop();
+      }
     });
     resize.observe(host);
     return () => resize.disconnect();

@@ -193,7 +193,7 @@ export class EphemerisEngine {
   }
 
   private static cacheKey(site: LandingSite, date: Date, hm: HorizonManager, extra: number[] = []): string {
-    return JSON.stringify([site.id, site.lat, site.lon, site.elevationKm, date.getTime(), hm.getProfile(), ...extra]);
+    return `${site.id}_${site.lat}_${site.lon}_${site.elevationKm}_${date.getTime()}_${hm.getKey()}_${extra.join('_')}`;
   }
 
   /** Both endpoints included; only intervals carry duration. */

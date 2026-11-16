@@ -42,11 +42,22 @@ export function useNavigatorStore() {
   const allSites = useMemo(() => [...CURATED_SITES, ...customSites], [customSites]);
   const currentEpochDate = useMemo(() => new Date(targetDate.getTime() + missionDay * 86400000), [targetDate, missionDay]);
   const horizonManager = useMemo(() => new HorizonManager(currentSite.horizonProfile), [currentSite]);
+
+  // High-frequency instantaneous topocentric coordinates (Fast ~0.02ms)
   const position = useMemo(() => EphemerisEngine.calculatePosition(currentSite, currentEpochDate, horizonManager), [currentSite, currentEpochDate, horizonManager]);
-  const siteMetrics = useMemo(() => EphemerisEngine.computeSiteMetrics(currentSite, currentEpochDate, horizonManager), [currentSite, currentEpochDate, horizonManager]);
-  const countdownEvents = useMemo(() => EphemerisEngine.computeCountdownEvents(currentSite, currentEpochDate, horizonManager), [currentSite, currentEpochDate, horizonManager]);
-  const synodicSamples = useMemo(() => EphemerisEngine.sampleWindow(currentSite, currentEpochDate, 30, 1440, horizonManager), [currentSite, currentEpochDate, horizonManager]);
-  const trail = useMemo(() => EphemerisEngine.sampleWindow(currentSite, new Date(currentEpochDate.getTime() - 12 * 3600000), 1.5, 72, horizonManager), [currentSite, currentEpochDate, horizonManager]);
+
+  // Quantize epoch to 30-minute intervals for heavy 30-day window metrics and countdown scans
+  const metricsEpochMs = Math.round(currentEpochDate.getTime() / (30 * 60 * 1000)) * (30 * 60 * 1000);
+  const metricsEpochDate = useMemo(() => new Date(metricsEpochMs), [metricsEpochMs]);
+
+  const siteMetrics = useMemo(() => EphemerisEngine.computeSiteMetrics(currentSite, metricsEpochDate, horizonManager), [currentSite, metricsEpochDate, horizonManager]);
+  const countdownEvents = useMemo(() => EphemerisEngine.computeCountdownEvents(currentSite, metricsEpochDate, horizonManager), [currentSite, metricsEpochDate, horizonManager]);
+  const synodicSamples = useMemo(() => EphemerisEngine.sampleWindow(currentSite, metricsEpochDate, 30, 1440, horizonManager), [currentSite, metricsEpochDate, horizonManager]);
+
+  // Quantize 36-hour trail window to 10-minute intervals to prevent recalculating 72 samples per second
+  const trailEpochMs = Math.round(currentEpochDate.getTime() / (10 * 60 * 1000)) * (10 * 60 * 1000);
+  const trailEpochDate = useMemo(() => new Date(trailEpochMs - 12 * 3600000), [trailEpochMs]);
+  const trail = useMemo(() => EphemerisEngine.sampleWindow(currentSite, trailEpochDate, 1.5, 72, horizonManager), [currentSite, trailEpochDate, horizonManager]);
   useEffect(() => {
     if (!isPlaying) return;
     const timer = window.setInterval(() => setMissionDay(day => (day + playbackSpeed / 24) % SYNODIC_MONTH_DAYS), 1000);

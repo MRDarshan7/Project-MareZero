@@ -45,15 +45,33 @@ export default function App() {
   const holdHandoff = useRef(false);
   const debug = new URLSearchParams(window.location.search).get('debug') === '1';
 
-  const registerDomeHost = useCallback((host: HTMLDivElement | null) => { domeHost.current = host; }, []);
-  const subscribeFrame = useCallback((listener: () => void) => { subscribers.current.add(listener); return () => { subscribers.current.delete(listener); }; }, []);
-  const scene: SceneBridge = useMemo(() => ({ conductor, error, registerDomeHost, subscribeFrame }), [conductor, error, registerDomeHost, subscribeFrame]);
   const renderNow = useCallback((p: number) => {
     const current = conductorRef.current; if (!current) return;
     current.setProgressImmediate(p);
     current.renderer.shadowMap.needsUpdate = true;
     current.renderer.render(current.scene, current.camera);
   }, []);
+  const registerDomeHost = useCallback((host: HTMLDivElement | null) => {
+    domeHost.current = host;
+    const current = conductorRef.current;
+    const canvas = canvasRef.current;
+    if (phase.current && host && canvas) {
+      if (canvas.parentElement !== host) {
+        host.appendChild(canvas);
+        canvas.style.pointerEvents = 'auto';
+        canvas.tabIndex = 0;
+        canvas.setAttribute('aria-label', 'Interactive 3D sky dome; drag to orbit and scroll to zoom.');
+      }
+      if (current) {
+        current.updateContainerObserver(host);
+        current.onResize();
+        current.ensureAnimationLoop();
+        renderNow(1);
+      }
+    }
+  }, [renderNow]);
+  const subscribeFrame = useCallback((listener: () => void) => { subscribers.current.add(listener); return () => { subscribers.current.delete(listener); }; }, []);
+  const scene: SceneBridge = useMemo(() => ({ conductor, error, registerDomeHost, subscribeFrame }), [conductor, error, registerDomeHost, subscribeFrame]);
   const attachCanvas = useCallback(() => {
     const current = conductorRef.current, canvas = canvasRef.current;
     const host = phase.current ? domeHost.current : storyHost.current;
@@ -62,15 +80,17 @@ export default function App() {
     canvas.style.pointerEvents = phase.current ? 'auto' : 'none';
     canvas.tabIndex = phase.current ? 0 : -1;
     canvas.setAttribute('aria-label', phase.current ? 'Interactive 3D sky dome; drag to orbit and scroll to zoom.' : 'Scroll-driven rocket launch story.');
-    current.onResize(); renderNow(phase.current ? 1 : target.current);
+    current.updateContainerObserver(host);
+    current.onResize();
+    current.ensureAnimationLoop();
+    renderNow(phase.current ? 1 : target.current);
   }, [renderNow]);
 
   useEffect(() => {
     const canvas = document.createElement('canvas'); canvas.className = 'shared-scene-canvas'; canvas.tabIndex = 0;
     canvasRef.current = canvas;
     const host = phase.current ? domeHost.current : storyHost.current;
-    if (!host) return;
-    host.appendChild(canvas);
+    if (host) host.appendChild(canvas);
     let current: ThreeConductor;
     try { current = new ThreeConductor(canvas); } catch {
       setError('3D is unavailable in this browser. The panorama and computed readouts remain available.'); canvas.remove(); return;
@@ -79,9 +99,11 @@ export default function App() {
     // This is the instrument's orbit framing; the flight/camera kinematic functions remain unchanged.
     current.domeZoom = 44;
     applyFieldTheme(current);
+    if (host) current.updateContainerObserver(host);
     current.onBeforeRender = () => {
       current.atmosphere.starfield.visible = current.currentProgress < 0.86;
-      current.skyDome.prepareView(current.camera, canvas.clientHeight);
+      const vh = canvas.parentElement?.clientHeight || canvas.clientHeight || window.innerHeight;
+      current.skyDome.prepareView(current.camera, vh);
     };
     const data = latest.current;
     current.skyDome.setHeightExaggeration(Math.abs(data.currentSite.lat) > 80 ? 8 : 1);
@@ -103,13 +125,28 @@ export default function App() {
   }, []);
 
   useLayoutEffect(attachCanvas, [dashboardVisible, storyEnabled, conductor, store.activeTab, attachCanvas]);
+
+  // Decoupled sub-effects: horizon profile updates only when site changes
   useLayoutEffect(() => {
     if (!conductor) return;
     conductor.skyDome.setHeightExaggeration(Math.abs(store.currentSite.lat) > 80 ? 8 : 1);
-    conductor.updateHorizonProfile(store.horizonManager); conductor.updateSkyDomePaths(store.trail);
+    conductor.updateHorizonProfile(store.horizonManager);
+    renderNow(phase.current ? 1 : target.current);
+  }, [conductor, store.currentSite, store.horizonManager, renderNow]);
+
+  // Trail path updates only when store.trail changes
+  useLayoutEffect(() => {
+    if (!conductor) return;
+    conductor.updateSkyDomePaths(store.trail);
+    renderNow(phase.current ? 1 : target.current);
+  }, [conductor, store.trail, renderNow]);
+
+  // Sky dome positions update when store.position changes
+  useLayoutEffect(() => {
+    if (!conductor) return;
     conductor.updateSkyDomePositions(store.position.sun, store.position.earth);
     renderNow(phase.current ? 1 : target.current);
-  }, [conductor, store.currentSite, store.horizonManager, store.trail, store.position, renderNow]);
+  }, [conductor, store.position, renderNow]);
 
   useEffect(() => {
     const scroll = () => {
@@ -128,14 +165,65 @@ export default function App() {
   }, [renderNow]);
 
   const skip = () => {
-    rememberDashboard(true); store.setIsPlaying(false);
-    enabled.current = false; phase.current = true; target.current = 1;
-    setStoryEnabled(false); setDashboardVisible(true); renderNow(1); window.scrollTo(0, 0);
+    rememberDashboard(true);
+    store.setIsPlaying(false);
+    enabled.current = false;
+    phase.current = true;
+    target.current = 1;
+
+    // Immediately preserve canvas in domeHost if available before storyHost unmounts
+    const canvas = canvasRef.current;
+    const dome = domeHost.current;
+    if (canvas && dome && canvas.parentElement !== dome) {
+      dome.appendChild(canvas);
+      canvas.style.pointerEvents = 'auto';
+      canvas.tabIndex = 0;
+      canvas.setAttribute('aria-label', 'Interactive 3D sky dome; drag to orbit and scroll to zoom.');
+    }
+
+    setStoryEnabled(false);
+    setDashboardVisible(true);
+
+    const current = conductorRef.current;
+    if (current) {
+      if (dome) current.updateContainerObserver(dome);
+      current.setProgressImmediate(1);
+      current.onResize();
+      current.ensureAnimationLoop();
+      renderNow(1);
+    }
+
+    window.scrollTo(0, 0);
   };
+
   const replay = () => {
-    rememberDashboard(false); store.setIsPlaying(false);
-    enabled.current = true; phase.current = false; target.current = 0;
-    setStoryEnabled(true); setDashboardVisible(false); window.scrollTo(0, 0); renderNow(0);
+    rememberDashboard(false);
+    store.setIsPlaying(false);
+    enabled.current = true;
+    phase.current = false;
+    target.current = 0;
+
+    const canvas = canvasRef.current;
+    const story = storyHost.current;
+    if (canvas && story && canvas.parentElement !== story) {
+      story.appendChild(canvas);
+      canvas.style.pointerEvents = 'none';
+      canvas.tabIndex = -1;
+      canvas.setAttribute('aria-label', 'Scroll-driven rocket launch story.');
+    }
+
+    setStoryEnabled(true);
+    setDashboardVisible(false);
+    window.scrollTo(0, 0);
+
+    const current = conductorRef.current;
+    if (current) {
+      if (story) current.updateContainerObserver(story);
+      current.setProgressImmediate(0);
+      current.onResize();
+      current.ensureAnimationLoop();
+      renderNow(0);
+    }
   };
 
   useEffect(() => {

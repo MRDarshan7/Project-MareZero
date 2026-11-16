@@ -42,6 +42,7 @@ export class ThreeConductor {
   private width: number = 0;
   private height: number = 0;
   private resizeObserver: ResizeObserver | null = null;
+  private containerObserver: ResizeObserver | null = null;
 
   // Orbit / Interaction in Sky-Dome mode
   public isDomeInteractive: boolean = false;
@@ -242,12 +243,10 @@ export class ThreeConductor {
   private onContextRestored = (): void => {
     console.info('[ThreeConductor] WebGL Context Restored: re-initializing WebGL pipeline');
     this.isContextLost = false;
-    this.renderer.setSize(this.width, this.height, false);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.onResize();
     this.precompileShaders();
     this.shadowNeedsUpdate = true;
-    this.lastTimeMs = performance.now();
-    this.animFrameId = requestAnimationFrame(this.animate);
+    this.ensureAnimationLoop();
   };
 
   private bindEvents(): void {
@@ -271,10 +270,67 @@ export class ThreeConductor {
     this.canvas.addEventListener('webglcontextrestored', this.onContextRestored, false);
   }
 
+  /**
+   * Re-bind ResizeObserver to the active parent container (e.g. storyHost or domeHost).
+   * Ensures that view toggles ('Dome' / 'Both') and responsive grid changes trigger smooth scaling.
+   */
+  public updateContainerObserver(container: HTMLElement | null): void {
+    if (this.isDestroyed || typeof ResizeObserver === 'undefined') return;
+    if (this.containerObserver) {
+      this.containerObserver.disconnect();
+      this.containerObserver = null;
+    }
+    if (container) {
+      this.containerObserver = new ResizeObserver(() => {
+        this.onResize();
+        this.ensureAnimationLoop();
+      });
+      this.containerObserver.observe(container);
+    }
+  }
+
+  /**
+   * Ensures the requestAnimationFrame render loop is actively running and not stalled.
+   */
+  public ensureAnimationLoop(): void {
+    if (this.isDestroyed || this.isContextLost) return;
+    if (this.animFrameId === null) {
+      this.lastTimeMs = performance.now();
+      this.animFrameId = requestAnimationFrame(this.animate);
+    }
+  }
+
   public onResize = (): void => {
     if (this.isDestroyed || !this.canvas) return;
-    this.width = this.canvas.clientWidth || window.innerWidth;
-    this.height = this.canvas.clientHeight || window.innerHeight;
+    const parent = this.canvas.parentElement;
+    let w = 0;
+    let h = 0;
+
+    if (parent) {
+      const rect = parent.getBoundingClientRect();
+      w = Math.round(rect.width) || parent.clientWidth;
+      h = Math.round(rect.height) || parent.clientHeight;
+    }
+
+    if (w <= 0 || h <= 0) {
+      w = this.canvas.clientWidth;
+      h = this.canvas.clientHeight;
+    }
+
+    // If still 0, only fallback to window if the canvas has no parent container
+    if (w <= 0 || h <= 0) {
+      if (!parent) {
+        w = window.innerWidth;
+        h = window.innerHeight;
+      } else {
+        return; // Container is currently hidden or collapsed; keep existing valid projection
+      }
+    }
+
+    if (this.width === w && this.height === h) return;
+
+    this.width = w;
+    this.height = h;
     this.camera.aspect = this.width / (this.height || 1);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(this.width, this.height, false);
@@ -571,6 +627,11 @@ export class ThreeConductor {
     }
 
     // Unbind window & canvas listeners
+    if (this.containerObserver) {
+      this.containerObserver.disconnect();
+      this.containerObserver = null;
+    }
+
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
@@ -603,6 +664,7 @@ export class ThreeConductor {
       }
     });
 
+    this.skyDome.destroy();
     this.renderer.dispose();
   }
 }

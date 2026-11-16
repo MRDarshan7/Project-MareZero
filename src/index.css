@@ -209,7 +209,7 @@ footer p { font-size:11px; color:var(--muted); max-width:100ch; }
 
 /* The restored scroll story and the dashboard share one persistent WebGL canvas. */
 .lunar-experience { background:var(--ink); min-height:100vh; }
-.intro-track { height:300vh; position:relative; }
+.intro-track { height:500vh; position:relative; }
 .intro-pin { position:sticky; top:0; height:100vh; overflow:hidden; }
 .intro-scene-host { position:absolute; inset:0; }
 .shared-scene-canvas { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
