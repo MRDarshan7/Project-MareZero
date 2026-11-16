@@ -39,6 +39,8 @@ export class ThreeConductor {
   private isContextLost: boolean = false;
   private animFrameId: number | null = null;
   private lastTimeMs: number = 0;
+  public simTimeSec: number = 0;
+  public isTestingDeterministic: boolean = false;
   private width: number = 0;
   private height: number = 0;
   private resizeObserver: ResizeObserver | null = null;
@@ -345,12 +347,17 @@ export class ThreeConductor {
     this.scrollProgress = Math.max(0, Math.min(1, progress));
   }
 
+  public setSimTime(timeSec: number): void {
+    this.simTimeSec = timeSec;
+  }
+
   /**
    * Set progress immediately without damping (100% deterministic for tests & scrub)
    */
   public setProgressImmediate(progress: number): void {
     this.scrollProgress = Math.max(0, Math.min(1, progress));
     this.currentProgress = this.scrollProgress;
+    this.simTimeSec = this.scrollProgress * 20.0;
     this.shadowNeedsUpdate = true;
     this.renderCinematicSequence(this.currentProgress, 0);
     this.onBeforeRender?.(this.currentProgress);
@@ -396,6 +403,11 @@ export class ThreeConductor {
 
     const dt = this.lastTimeMs > 0 ? Math.min((timeMs - this.lastTimeMs) / 1000, 0.1) : 0.016;
     this.lastTimeMs = timeMs;
+    if (this.isTestingDeterministic) {
+      this.simTimeSec = this.currentProgress * 20.0;
+    } else {
+      this.simTimeSec += dt;
+    }
 
     // Frame-rate independent exponential damping for buttery-smooth camera and craft interpolation
     // currentP += (targetP - currentP) * (1 - Math.exp(-lambda * dt))
@@ -506,14 +518,15 @@ export class ThreeConductor {
     const boosterThrust = seg(p, 0.06, 0.12) * (1 - seg(p, 0.33, 0.35));
     this.rocket.setBoosterThrust(boosterThrust);
 
-    // Earth launch fire and smoke simulation (booster exhaust jet, pad steam & ascent wake)
+    // Earth launch fire and smoke simulation (booster flame jet, expanding grey plumes, pad steam & ascent wake)
     this.particles.updateEarthLaunch(
       p,
       this._craftState.craftRigPos.x,
       this._craftState.craftRigPos.y,
       this._craftState.craftRigPos.z,
       boosterThrust,
-      padDrop
+      padDrop,
+      this.simTimeSec
     );
 
     // ----------------------------------------------------

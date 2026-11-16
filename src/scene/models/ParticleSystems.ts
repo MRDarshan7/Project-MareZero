@@ -32,44 +32,65 @@ function createRadialTexture(
   }
 }
 
+// Fixed relative nozzle coordinates for the 9 booster engines (1 center + 8 outer)
+const NOZZLE_OFFSETS: ReadonlyArray<[number, number]> = [
+  [0, 0],
+  [0.85, 0],
+  [-0.85, 0],
+  [0, 0.85],
+  [0, -0.85],
+  [0.6, 0.6],
+  [-0.6, 0.6],
+  [0.6, -0.6],
+  [-0.6, -0.6]
+];
+
 /**
- * High-performance, zero-allocation particle system for Earth launch liftoff
- * (roaring engine flame jet, ground launch pad steam & smoke, and atmospheric ascent wake).
- * 
- * 100% deterministic spatial functions of scroll progress p guarantee identical forward & backward
- * scrubbing without non-deterministic frame drift.
+ * High-performance, zero-allocation real-time particle system for rocket launch:
+ * 1. Glowing orange/yellow flame particles shooting downward from the 9 engine nozzles.
+ * 2. Expanding, semi-transparent grey smoke plumes billowing downward in the rocket's wake.
+ * 3. Launch pad flame trench steam & ground smoke.
+ * 4. Atmospheric ascent column smoke wake.
+ * 5. Lunar touchdown dust.
  */
 export class ParticleSystems {
   public group: THREE.Group;
 
-  // 1. High-Velocity Booster Flame Jet
+  // 1. Glowing Orange/Yellow Flame Particles (Booster Nozzle Exhaust)
   private firePoints: THREE.Points;
   private firePositions: Float32Array;
   private fireColors: Float32Array;
-  private fireCount = 450;
+  private fireCount = 550;
   private fireMat: THREE.PointsMaterial;
 
-  // 2. Launch Pad Ground Smoke & Steam Cloud (Flame trench & concrete pad)
+  // 2. Expanding, Semi-Transparent Grey Smoke Plumes (Exhaust Plume Wake)
+  private smokePlumePoints: THREE.Points;
+  private smokePlumePositions: Float32Array;
+  private smokePlumeColors: Float32Array;
+  private smokePlumeCount = 650;
+  private smokePlumeMat: THREE.PointsMaterial;
+
+  // 3. Launch Pad Ground Smoke & Steam Cloud (Flame trench & concrete pad)
   private padSmokePoints: THREE.Points;
   private padSmokePositions: Float32Array;
   private padSmokeColors: Float32Array;
   private padSmokeCount = 450;
   private padSmokeMat: THREE.PointsMaterial;
 
-  // 3. Atmospheric Ascent Smoke Column (Rocket's wake)
+  // 4. Atmospheric Ascent Column Smoke Wake
   private ascentSmokePoints: THREE.Points;
   private ascentSmokePositions: Float32Array;
   private ascentSmokeColors: Float32Array;
   private ascentSmokeCount = 400;
   private ascentSmokeMat: THREE.PointsMaterial;
 
-  // 4. Legacy Booster Plume (Backward compatibility)
+  // 5. Legacy Booster Plume (Backward compatibility)
   public plumePoints: THREE.Points;
   private plumePositions: Float32Array;
   private plumeCount = 150;
   private plumeMat: THREE.PointsMaterial;
 
-  // 5. Lunar Touchdown Dust Particles
+  // 6. Lunar Touchdown Dust Particles
   public dustPoints: THREE.Points;
   private dustPositions: Float32Array;
   private dustCount = 250;
@@ -86,22 +107,22 @@ export class ParticleSystems {
     // Procedural Soft Sprites
     this.fireTexture = createRadialTexture(64, [
       [0.0, 'rgba(255, 255, 255, 1.0)'],
-      [0.2, 'rgba(255, 235, 120, 0.95)'],
-      [0.45, 'rgba(255, 130, 25, 0.75)'],
-      [0.75, 'rgba(220, 45, 10, 0.25)'],
+      [0.18, 'rgba(255, 240, 140, 0.98)'],
+      [0.45, 'rgba(255, 145, 25, 0.85)'],
+      [0.75, 'rgba(235, 55, 10, 0.35)'],
       [1.0, 'rgba(180, 10, 0, 0.0)']
     ]);
 
     this.smokeTexture = createRadialTexture(64, [
       [0.0, 'rgba(255, 255, 255, 0.92)'],
-      [0.25, 'rgba(242, 245, 250, 0.75)'],
-      [0.55, 'rgba(220, 226, 236, 0.35)'],
-      [0.85, 'rgba(195, 205, 220, 0.08)'],
+      [0.25, 'rgba(240, 243, 248, 0.75)'],
+      [0.55, 'rgba(215, 222, 232, 0.38)'],
+      [0.85, 'rgba(190, 200, 215, 0.08)'],
       [1.0, 'rgba(180, 195, 210, 0.0)']
     ]);
 
     // ----------------------------------------------------
-    // 1. Fire Exhaust Jet
+    // 1. Glowing Orange/Yellow Flame Particles
     // ----------------------------------------------------
     const fireGeo = new THREE.BufferGeometry();
     this.firePositions = new Float32Array(this.fireCount * 3);
@@ -110,7 +131,7 @@ export class ParticleSystems {
     fireGeo.setAttribute('color', new THREE.BufferAttribute(this.fireColors, 3));
 
     this.fireMat = new THREE.PointsMaterial({
-      size: 1.6,
+      size: 1.85,
       vertexColors: true,
       map: this.fireTexture,
       transparent: true,
@@ -123,7 +144,30 @@ export class ParticleSystems {
     this.group.add(this.firePoints);
 
     // ----------------------------------------------------
-    // 2. Pad Ground Smoke & Steam
+    // 2. Expanding Semi-Transparent Grey Smoke Plumes
+    // ----------------------------------------------------
+    const smokePlumeGeo = new THREE.BufferGeometry();
+    this.smokePlumePositions = new Float32Array(this.smokePlumeCount * 3);
+    this.smokePlumeColors = new Float32Array(this.smokePlumeCount * 3);
+    smokePlumeGeo.setAttribute('position', new THREE.BufferAttribute(this.smokePlumePositions, 3));
+    smokePlumeGeo.setAttribute('color', new THREE.BufferAttribute(this.smokePlumeColors, 3));
+
+    this.smokePlumeMat = new THREE.PointsMaterial({
+      size: 5.8,
+      vertexColors: true,
+      map: this.smokeTexture,
+      transparent: true,
+      opacity: 0.68,
+      blending: THREE.NormalBlending,
+      depthWrite: false
+    });
+    this.smokePlumePoints = new THREE.Points(smokePlumeGeo, this.smokePlumeMat);
+    this.smokePlumePoints.frustumCulled = false;
+    this.smokePlumePoints.visible = false;
+    this.group.add(this.smokePlumePoints);
+
+    // ----------------------------------------------------
+    // 3. Pad Ground Smoke & Deluge Steam
     // ----------------------------------------------------
     const padSmokeGeo = new THREE.BufferGeometry();
     this.padSmokePositions = new Float32Array(this.padSmokeCount * 3);
@@ -146,7 +190,7 @@ export class ParticleSystems {
     this.group.add(this.padSmokePoints);
 
     // ----------------------------------------------------
-    // 3. Ascent Atmospheric Smoke Wake
+    // 4. Atmospheric Ascent Column Smoke Wake
     // ----------------------------------------------------
     const ascSmokeGeo = new THREE.BufferGeometry();
     this.ascentSmokePositions = new Float32Array(this.ascentSmokeCount * 3);
@@ -169,7 +213,7 @@ export class ParticleSystems {
     this.group.add(this.ascentSmokePoints);
 
     // ----------------------------------------------------
-    // 4. Legacy Booster Plume Points
+    // 5. Legacy Booster Plume Points
     // ----------------------------------------------------
     const plumeGeo = new THREE.BufferGeometry();
     this.plumePositions = new Float32Array(this.plumeCount * 3);
@@ -188,7 +232,7 @@ export class ParticleSystems {
     this.group.add(this.plumePoints);
 
     // ----------------------------------------------------
-    // 5. Lunar Touchdown Dust Particles
+    // 6. Lunar Touchdown Dust Particles
     // ----------------------------------------------------
     const dustGeo = new THREE.BufferGeometry();
     this.dustPositions = new Float32Array(this.dustCount * 3);
@@ -207,8 +251,11 @@ export class ParticleSystems {
   }
 
   /**
-   * Deterministic Earth launch smoke and fire updater across progress p in [0.05, 0.38].
-   * Evaluates closed-form spatial formulas for zero-allocation, 100% reversible forward & backward scrubbing.
+   * Real-time particle-based rocket engine fire and exhaust smoke updater.
+   * Emits glowing orange/yellow flame particles and expanding, semi-transparent grey smoke plumes
+   * downward from the 9 engine nozzles during liftoff and ascent.
+   * 
+   * Zero GC runtime: updates pre-allocated Float32Array buffers in-place every frame.
    */
   public updateEarthLaunch(
     p: number,
@@ -216,58 +263,76 @@ export class ParticleSystems {
     craftRigY: number,
     craftRigZ: number,
     thrust: number,
-    padDrop: number
+    padDrop: number,
+    simTimeSec: number = 0
   ): void {
     if (p < 0.05 || p > 0.38) {
       this.firePoints.visible = false;
+      this.smokePlumePoints.visible = false;
       this.padSmokePoints.visible = false;
       this.ascentSmokePoints.visible = false;
       return;
     }
 
+    const t = simTimeSec;
+    const nozzleExitY = craftRigY - 0.25;
+
     // ----------------------------------------------------
-    // 1. High-Velocity Booster Flame Exhaust Jet
+    // 1. Glowing Orange/Yellow Flame Particles (Engine Nozzles)
     // ----------------------------------------------------
     const isFireActive = thrust > 0.02 && p >= 0.06 && p <= 0.355;
     this.firePoints.visible = isFireActive;
     if (isFireActive) {
       const firePos = this.firePositions;
       const fireCol = this.fireColors;
-      const maxLen = 3.5 + 4.8 * thrust;
-      const nozzleY = craftRigY - 0.25;
+      const maxFlameLen = (3.8 + 4.2 * thrust);
 
       for (let i = 0; i < this.fireCount; i++) {
         const idx = i * 3;
+        // Assign particle to one of the 9 booster engine nozzles
+        const nCoords = NOZZLE_OFFSETS[i % NOZZLE_OFFSETS.length];
+        const nX = craftRigX + nCoords[0];
+        const nZ = craftRigZ + nCoords[1];
+
+        // Real-time downward flow along the flame jet
         const s = i / this.fireCount;
-        // Deterministic high-frequency flow along the exhaust stream
-        const phase = (p * 95.0 + s) % 1.0;
-        const dist = phase * maxLen;
+        const phase = (t * 26.0 + s) % 1.0;
+        const dist = phase * maxFlameLen;
 
-        // Supersonic bell expansion profile
-        const spread = 0.35 + dist * 0.24;
-        const theta = i * 2.3999632 + phase * 4.2;
-        const turb = 0.78 + 0.22 * Math.sin(i * 11.73 + p * 50.0);
+        // Plume radius: narrow at nozzle exit, expanding slightly downstream
+        const spread = 0.22 + dist * 0.18;
+        const theta = i * 2.3999632 + phase * 5.5;
+        const turb = 0.82 + 0.18 * Math.sin(i * 12.31 + t * 40.0);
 
-        firePos[idx] = craftRigX + Math.cos(theta) * spread * turb;
-        firePos[idx + 1] = nozzleY - dist;
-        firePos[idx + 2] = craftRigZ + Math.sin(theta) * spread * turb;
+        firePos[idx] = nX + Math.cos(theta) * spread * turb;
+        firePos[idx + 1] = nozzleExitY - dist;
+        firePos[idx + 2] = nZ + Math.sin(theta) * spread * turb;
 
-        // Color thermal gradient: white-hot throat -> brilliant yellow -> fiery orange -> dark crimson
-        if (phase < 0.18) {
-          const t = phase / 0.18;
+        // Authentic thermal gradient: incandescent white-hot throat -> glowing yellow -> vibrant orange -> flame red
+        if (phase < 0.15) {
+          // White-hot core at nozzle throat
+          const u = phase / 0.15;
           fireCol[idx] = 1.0;
-          fireCol[idx + 1] = 1.0 - t * 0.1;
-          fireCol[idx + 2] = 1.0 - t * 0.8;
-        } else if (phase < 0.55) {
-          const t = (phase - 0.18) / 0.37;
+          fireCol[idx + 1] = 1.0 - u * 0.08;
+          fireCol[idx + 2] = 0.95 - u * 0.75;
+        } else if (phase < 0.48) {
+          // Glowing bright yellow to golden amber
+          const u = (phase - 0.15) / 0.33;
           fireCol[idx] = 1.0;
-          fireCol[idx + 1] = 0.9 - t * 0.45;
-          fireCol[idx + 2] = 0.2 * (1.0 - t);
+          fireCol[idx + 1] = 0.92 - u * 0.42;
+          fireCol[idx + 2] = 0.20 * (1.0 - u);
+        } else if (phase < 0.80) {
+          // Glowing vibrant orange flame
+          const u = (phase - 0.48) / 0.32;
+          fireCol[idx] = 1.0;
+          fireCol[idx + 1] = 0.50 - u * 0.35;
+          fireCol[idx + 2] = 0.04;
         } else {
-          const t = (phase - 0.55) / 0.45;
-          fireCol[idx] = 1.0 - t * 0.35;
-          fireCol[idx + 1] = 0.45 - t * 0.38;
-          fireCol[idx + 2] = 0.02;
+          // Flame tip / cooling red-orange embers
+          const u = (phase - 0.80) / 0.20;
+          fireCol[idx] = 1.0 - u * 0.25;
+          fireCol[idx + 1] = 0.15 - u * 0.12;
+          fireCol[idx + 2] = 0.01;
         }
       }
       this.firePoints.geometry.attributes.position.needsUpdate = true;
@@ -275,7 +340,56 @@ export class ParticleSystems {
     }
 
     // ----------------------------------------------------
-    // 2. Launch Pad Ground Smoke & Deluge Steam Cloud
+    // 2. Expanding, Semi-Transparent Grey Smoke Plumes (Downward from Nozzles)
+    // ----------------------------------------------------
+    const isSmokePlumeActive = thrust > 0.02 && p >= 0.065 && p <= 0.36;
+    this.smokePlumePoints.visible = isSmokePlumeActive;
+    if (isSmokePlumeActive) {
+      const smokePos = this.smokePlumePositions;
+      const smokeCol = this.smokePlumeColors;
+
+      // Throttle opacity with flight envelope
+      const rampIn = Math.max(0, Math.min(1, (p - 0.065) / 0.03));
+      const rampOut = 1.0 - Math.max(0, Math.min(1, (p - 0.31) / 0.05));
+      this.smokePlumeMat.opacity = 0.70 * rampIn * rampOut;
+
+      for (let i = 0; i < this.smokePlumeCount; i++) {
+        const idx = i * 3;
+        const s = i / this.smokePlumeCount;
+        // Real-time expansion cycle downward
+        const phase = (t * 5.2 + s) % 1.0;
+        const dist = 1.8 + phase * 26.0;
+
+        // Exponential aerodynamic expansion as smoke entrains air
+        const plumeRadius = 0.85 + Math.pow(phase, 0.75) * 8.5;
+        const angle = i * 2.3999632 + phase * 3.8;
+        const turb = 0.78 + 0.22 * Math.sin(i * 9.47 + t * 14.0);
+
+        smokePos[idx] = craftRigX + Math.cos(angle) * plumeRadius * turb;
+        smokePos[idx + 1] = nozzleExitY - dist;
+        smokePos[idx + 2] = craftRigZ + Math.sin(angle) * plumeRadius * turb;
+
+        // Color transition: warm fiery underglow near nozzle -> semi-transparent cool grey smoke
+        if (phase < 0.22) {
+          // Warm amber-orange glow reflecting engine fire
+          const u = phase / 0.22;
+          smokeCol[idx] = 0.95 * (1.0 - u) + 0.75 * u;
+          smokeCol[idx + 1] = 0.75 * (1.0 - u) + 0.77 * u;
+          smokeCol[idx + 2] = 0.45 * (1.0 - u) + 0.80 * u;
+        } else {
+          // Atmospheric semi-transparent neutral-to-cool grey
+          const shade = 0.72 + 0.16 * Math.sin(i * 4.19);
+          smokeCol[idx] = 0.72 * shade;
+          smokeCol[idx + 1] = 0.75 * shade;
+          smokeCol[idx + 2] = 0.79 * shade;
+        }
+      }
+      this.smokePlumePoints.geometry.attributes.position.needsUpdate = true;
+      (this.smokePlumePoints.geometry.attributes as any).color.needsUpdate = true;
+    }
+
+    // ----------------------------------------------------
+    // 3. Launch Pad Ground Smoke & Deluge Steam Cloud
     // ----------------------------------------------------
     const isPadSmokeActive = p >= 0.055 && p <= 0.24;
     this.padSmokePoints.visible = isPadSmokeActive;
@@ -300,7 +414,7 @@ export class ParticleSystems {
         // Flame trench exhaust deflector channels massive billows North-South (Z axis)
         const zStretch = 1.0 + 1.8 * Math.pow(Math.abs(Math.sin(theta)), 1.5);
         const r = frac * maxR;
-        const puffH = (1.0 - frac * 0.55) * maxH * (0.75 + 0.25 * Math.sin(i * 8.43 + p * 20.0));
+        const puffH = (1.0 - frac * 0.55) * maxH * (0.75 + 0.25 * Math.sin(i * 8.43 + t * 6.0));
 
         padPos[idx] = 3.5 + Math.cos(theta) * r * 0.85;
         padPos[idx + 1] = -padDrop + 0.2 + puffH;
@@ -320,7 +434,7 @@ export class ParticleSystems {
     }
 
     // ----------------------------------------------------
-    // 3. Atmospheric Ascent Smoke Wake / Column
+    // 4. Atmospheric Ascent Column Smoke Wake
     // ----------------------------------------------------
     const isAscentSmokeActive = p >= 0.08 && p <= 0.355;
     this.ascentSmokePoints.visible = isAscentSmokeActive;
@@ -348,7 +462,7 @@ export class ParticleSystems {
         // Plume widens as it falls behind the climbing rocket due to atmospheric dispersion
         const plumeRadius = 0.95 + (1.0 - u) * (3.5 + Math.min(1, (p - 0.08) / 0.20) * 3.8);
         const spiralAng = i * 2.3999632 + u * 14.0;
-        const turb = 0.76 + 0.24 * Math.sin(i * 12.87 + p * 28.0);
+        const turb = 0.76 + 0.24 * Math.sin(i * 12.87 + t * 8.0);
 
         ascPos[idx] = pxMid + Math.cos(spiralAng) * plumeRadius * turb;
         ascPos[idx + 1] = py;
@@ -423,6 +537,9 @@ export class ParticleSystems {
 
     this.firePoints.geometry.dispose();
     this.fireMat.dispose();
+
+    this.smokePlumePoints.geometry.dispose();
+    this.smokePlumeMat.dispose();
 
     this.padSmokePoints.geometry.dispose();
     this.padSmokeMat.dispose();

@@ -240,7 +240,12 @@ export default function App() {
   useEffect(() => {
     if (!debug) return;
     const api = {
-      holdHandoff: (hold: boolean) => { holdHandoff.current = hold; },
+      holdHandoff: (hold: boolean) => {
+        holdHandoff.current = hold;
+        if (conductorRef.current) {
+          conductorRef.current.isTestingDeterministic = hold;
+        }
+      },
       setProgress: (p: number) => {
         if (!track.current) return;
         const range = track.current.offsetHeight - window.innerHeight;
@@ -251,6 +256,11 @@ export default function App() {
       },
       snapshot: () => {
         const current = conductorRef.current;
+        if (current) {
+          current.setSimTime(current.currentProgress * 20.0);
+          current.renderCinematicSequence(current.currentProgress, current.currentProgress * 20000);
+          current.renderer.render(current.scene, current.camera);
+        }
         current?.scene.updateMatrixWorld(true); current?.camera.updateMatrixWorld(true);
         return { p: current?.currentProgress, target: target.current, site: latest.current.currentSite.id,
           date: latest.current.currentEpochDate.toISOString(), dashboard: phase.current,

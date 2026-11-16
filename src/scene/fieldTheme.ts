@@ -5,9 +5,19 @@ import type { ThreeConductor } from './ThreeConductor';
 export function applyFieldTheme(conductor: ThreeConductor): void {
   conductor.scene.traverse(object => {
     for (let ancestor: THREE.Object3D | null = object; ancestor; ancestor = ancestor.parent) {
-      if (ancestor === conductor.skyDome.group) return;
+      if (
+        ancestor === conductor.skyDome.group ||
+        ancestor === conductor.particles.group ||
+        ancestor === conductor.rocket.boosterPlume
+      ) return;
     }
-    if (object instanceof THREE.PointLight) object.visible = false;
+    if (object === conductor.particles.group || object === conductor.rocket.boosterPlume) return;
+    if (object instanceof THREE.PointLight) {
+      if (object === conductor.rocket.boosterLight || object === conductor.atmosphere.ignitionLight) {
+        return;
+      }
+      object.visible = false;
+    }
     if (!(object instanceof THREE.Mesh || object instanceof THREE.Points)) return;
     // Preserve the national and MAREZERO decals exactly as supplied in the working tree.
     if (/flag|marezero/i.test(object.name)) return;
@@ -23,14 +33,13 @@ export function applyFieldTheme(conductor: ThreeConductor): void {
       material.needsUpdate = true;
     }
   });
-  // Hide frame-history-dependent visual effects, retaining their original logic and randomness.
-  conductor.particles.group.visible = false;
+  // Preserve rocket launch particle systems and booster flame plume
+  conductor.particles.group.visible = true;
   conductor.atmosphere.cloudLayers.traverse(object => {
     if (object instanceof THREE.Mesh) {
       for (const material of Array.isArray(object.material) ? object.material : [object.material]) material.visible = false;
     }
   });
-  (conductor.rocket.boosterPlume.material as THREE.Material).visible = false;
   (conductor.rocket.upperPlume.material as THREE.Material).visible = false;
   (conductor.lander.engineFlame.material as THREE.Material).visible = false;
   conductor.surface.craterGroup.visible = false;
