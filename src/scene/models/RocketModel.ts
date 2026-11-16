@@ -169,17 +169,50 @@ export class RocketModel {
     }
     this.boosterStage.add(nozzleCluster);
 
-    // Booster Flame Plume
+    // Booster Flame Plume: High-fidelity layered expansion envelope
     const boosterFlameMat = new THREE.MeshBasicMaterial({
-      color: 0xff8811,
+      color: 0xff6600,
       transparent: true,
-      opacity: 0.95
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
     });
-    this.boosterPlume = new THREE.Mesh(new THREE.ConeGeometry(1.6, 4.5, 16), boosterFlameMat);
+    this.boosterPlume = new THREE.Mesh(new THREE.ConeGeometry(1.6, 4.5, 20, 2, true), boosterFlameMat);
     this.boosterPlume.rotation.x = Math.PI;
     this.boosterPlume.position.y = -2.4;
     this.boosterPlume.visible = false;
     this.boosterStage.add(this.boosterPlume);
+
+    // Inner hot core
+    const coreGeo = new THREE.ConeGeometry(0.95, 3.6, 16, 1, true);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0xffea44,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    coreMesh.position.y = 0.45;
+    this.boosterPlume.add(coreMesh);
+
+    // 3 Mach shock diamonds (series of bright white octahedrons inside throat)
+    for (let d = 0; d < 3; d++) {
+      const dGeo = new THREE.OctahedronGeometry(0.42 - d * 0.08, 0);
+      dGeo.scale(1, 2.2, 1);
+      const dMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.95 - d * 0.15,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const dMesh = new THREE.Mesh(dGeo, dMat);
+      dMesh.position.y = 1.35 - d * 1.05;
+      this.boosterPlume.add(dMesh);
+    }
 
     this.boosterLight = new THREE.PointLight(0xff7711, 0, 50, 1.8);
     this.boosterLight.position.set(0, -2.0, 0);
@@ -323,7 +356,7 @@ export class RocketModel {
       this.boosterLight.intensity = 0;
     } else {
       this.boosterPlume.visible = true;
-      this.boosterPlume.scale.set(i, i * (1 + Math.random() * 0.25), i);
+      this.boosterPlume.scale.set(i, i, i);
       this.boosterLight.intensity = i * 4.8;
     }
   }
@@ -335,7 +368,7 @@ export class RocketModel {
       this.upperLight.intensity = 0;
     } else {
       this.upperPlume.visible = true;
-      this.upperPlume.scale.set(i, i * (1 + Math.random() * 0.25), i);
+      this.upperPlume.scale.set(i, i, i);
       this.upperLight.intensity = i * 4.2;
     }
   }

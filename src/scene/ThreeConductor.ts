@@ -500,14 +500,21 @@ export class ThreeConductor {
     this.atmosphere.cloudLayers.visible = p < 0.38;
 
     // ----------------------------------------------------
-    // BEAT 1 & 2: LIFTOFF & ASCENT (0.08 - 0.35)
+    // BEAT 1 & 2: LIFTOFF & ASCENT (0.06 - 0.35)
     // ----------------------------------------------------
-    const boosterThrust = seg(p, 0.08, 0.14) * (1 - seg(p, 0.33, 0.35));
+    // Ignition begins at p = 0.06 on pad, spools to full thrust, MECO at p = 0.35
+    const boosterThrust = seg(p, 0.06, 0.12) * (1 - seg(p, 0.33, 0.35));
     this.rocket.setBoosterThrust(boosterThrust);
 
-    // Liftoff engine plume particles
-    const isBoosterFiring = p > 0.08 && p < 0.35;
-    this.particles.updatePlume(isBoosterFiring, this._craftState.craftRigPos.x, this._craftState.craftRigPos.y - 1.2, this._craftState.craftRigPos.z);
+    // Earth launch fire and smoke simulation (booster exhaust jet, pad steam & ascent wake)
+    this.particles.updateEarthLaunch(
+      p,
+      this._craftState.craftRigPos.x,
+      this._craftState.craftRigPos.y,
+      this._craftState.craftRigPos.z,
+      boosterThrust,
+      padDrop
+    );
 
     // ----------------------------------------------------
     // BEAT 3: BOOSTER MECO & VACUUM IGNITION (0.35 - 0.45)
@@ -664,6 +671,7 @@ export class ThreeConductor {
       }
     });
 
+    this.particles.destroy();
     this.skyDome.destroy();
     this.renderer.dispose();
   }

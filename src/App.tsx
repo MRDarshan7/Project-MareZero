@@ -159,9 +159,20 @@ export default function App() {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) renderNow(p);
       else current?.setScrollProgress(p);
     };
+
+    const origScrollTo = window.scrollTo.bind(window);
+    window.scrollTo = function(...args: any[]) {
+      origScrollTo.apply(window, args as any);
+      scroll();
+    };
+
     window.addEventListener('scroll', scroll, { passive: true });
     window.addEventListener('resize', scroll);
-    return () => { window.removeEventListener('scroll', scroll); window.removeEventListener('resize', scroll); };
+    return () => {
+      window.scrollTo = origScrollTo;
+      window.removeEventListener('scroll', scroll);
+      window.removeEventListener('resize', scroll);
+    };
   }, [renderNow]);
 
   const skip = () => {

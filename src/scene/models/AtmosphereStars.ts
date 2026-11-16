@@ -365,10 +365,10 @@ export class AtmosphereStars {
       c.rotation.x = clampRelease * 0.85; // tilts back clear of nozzle
     }
 
-    // Ignition Light Flash (p = 0.06 -> 0.10)
-    if (p >= 0.06 && p <= 0.10) {
-      const flash = Math.sin(seg(0.06, 0.10) * Math.PI);
-      this.ignitionLight.intensity = flash * 9.5;
+    // Ignition & Liftoff Pad Base Illumination (p = 0.06 -> 0.16)
+    if (p >= 0.06 && p <= 0.16) {
+      const padIgnite = seg(0.06, 0.09) * (1 - seg(0.12, 0.16));
+      this.ignitionLight.intensity = padIgnite * 8.5;
     } else {
       this.ignitionLight.intensity = 0;
     }
