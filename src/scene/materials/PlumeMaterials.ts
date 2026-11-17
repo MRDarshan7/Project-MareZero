@@ -116,18 +116,18 @@ export class PlumeMaterials {
   }
 
   /**
-   * Throttleable lunar descent engine plume (warm golden amber with white throat)
+   * Throttleable lunar descent engine retro plume (supersonic cyan-blue with white throat)
    */
-  public static createDescentPlumeMesh(radius: number = 0.65, length: number = 1.8): THREE.Group {
+  public static createDescentPlumeMesh(radius: number = 0.48, length: number = 1.6): THREE.Group {
     const group = new THREE.Group();
 
-    // 1. Expansion envelope
+    // 1. Expansion envelope (electric cyan-blue)
     const outerGeo = new THREE.ConeGeometry(radius, length, 20, 2, true);
     outerGeo.rotateX(Math.PI);
     const outerMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b,
+      color: 0x38bdf8,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.7,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false
@@ -136,19 +136,34 @@ export class PlumeMaterials {
     outerMesh.position.y = -length / 2;
     group.add(outerMesh);
 
-    // 2. White-hot throat cone
-    const innerGeo = new THREE.ConeGeometry(radius * 0.35, length * 0.55, 12, 1, true);
+    // 2. High-energy ice-blue core
+    const coreGeo = new THREE.ConeGeometry(radius * 0.5, length * 0.7, 16, 1, true);
+    coreGeo.rotateX(Math.PI);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0x93c5fd,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    coreMesh.position.y = -length * 0.32;
+    group.add(coreMesh);
+
+    // 3. White-hot throat cone
+    const innerGeo = new THREE.ConeGeometry(radius * 0.25, length * 0.35, 12, 1, false);
     innerGeo.rotateX(Math.PI);
     const innerMat = new THREE.MeshBasicMaterial({
-      color: 0xfffbeb,
+      color: 0xffffff,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.98,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false
     });
     const innerMesh = new THREE.Mesh(innerGeo, innerMat);
-    innerMesh.position.y = -length * 0.28;
+    innerMesh.position.y = -length * 0.16;
     group.add(innerMesh);
 
     return group;

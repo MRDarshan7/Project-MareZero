@@ -11,7 +11,8 @@ export function applyFieldTheme(conductor: ThreeConductor): void {
         ancestor === conductor.rocket.boosterPlume ||
         ancestor === conductor.atmosphere.approachMoon ||
         ancestor === conductor.surface.landingTerrain ||
-        ancestor === conductor.surface.domeBaseDisc
+        ancestor === conductor.surface.domeBaseDisc ||
+        ancestor === conductor.lander.engineFlame
       ) return;
     }
     if (
@@ -19,10 +20,16 @@ export function applyFieldTheme(conductor: ThreeConductor): void {
       object === conductor.rocket.boosterPlume ||
       object === conductor.atmosphere.approachMoon ||
       object === conductor.surface.landingTerrain ||
-      object === conductor.surface.domeBaseDisc
+      object === conductor.surface.domeBaseDisc ||
+      object === conductor.lander.engineFlame
     ) return;
     if (object instanceof THREE.PointLight) {
-      if (object === conductor.rocket.boosterLight || object === conductor.atmosphere.ignitionLight) {
+      if (
+        object === conductor.rocket.boosterLight ||
+        object === conductor.atmosphere.ignitionLight ||
+        object === conductor.lander.engineLight ||
+        object === conductor.lander.underLanderFill
+      ) {
         return;
       }
       object.visible = false;
@@ -50,7 +57,7 @@ export function applyFieldTheme(conductor: ThreeConductor): void {
     }
   });
   (conductor.rocket.upperPlume.material as THREE.Material).visible = false;
-  (conductor.lander.engineFlame.material as THREE.Material).visible = false;
+  (conductor.lander.engineFlame.material as THREE.Material).visible = true;
   conductor.surface.craterGroup.visible = true;
   (conductor.surface.horizonWallMesh.material as THREE.Material).visible = false;
   const stars = conductor.atmosphere.starfield.material as THREE.PointsMaterial;

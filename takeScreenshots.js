@@ -27,15 +27,20 @@ async function run() {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900 });
 
-  console.log('Navigating to http://localhost:5173/ ...');
-  await page.goto('http://localhost:5173/', { waitUntil: 'load', timeout: 15000 });
+  console.log('Navigating to http://localhost:5173/?debug=1 ...');
+  await page.goto('http://localhost:5173/?debug=1', { waitUntil: 'load', timeout: 15000 });
   await new Promise(r => setTimeout(r, 1200));
 
   // Helper for scrolling to fraction
   async function scrollToProgress(p) {
     await page.evaluate((prog) => {
-      const maxScroll = document.body.scrollHeight - window.innerHeight;
-      window.scrollTo(0, prog * maxScroll);
+      if (window.__lunarDebug && window.__lunarDebug.setProgress) {
+        window.__lunarDebug.setProgress(prog);
+      } else {
+        const track = document.querySelector('.intro-track');
+        const range = track ? track.offsetHeight - window.innerHeight : document.body.scrollHeight - window.innerHeight;
+        window.scrollTo(0, prog * range);
+      }
     }, p);
     await new Promise(r => setTimeout(r, 600));
   }

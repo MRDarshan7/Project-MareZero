@@ -476,6 +476,8 @@ export class ThreeConductor {
       this.atmosphere.ambientLight.intensity = THREE.MathUtils.lerp(0.18, 0.012, moonTrans);
       this.atmosphere.directionalSun.color.setHex(0xfffaed);
       this.atmosphere.directionalSun.intensity = THREE.MathUtils.lerp(3.5, 4.8, moonTrans);
+      // Subtle upward-facing soft fill light (Moon-bounce light under the lander)
+      this.atmosphere.moonBounceLight.intensity = THREE.MathUtils.lerp(0.0, 0.45, moonTrans);
       if (p < 0.75) {
         // Oblique dramatic space sun angle for high-relief terminator shadows across Moon globe
         this.atmosphere.directionalSun.position.set(48, 22, 10);
@@ -486,10 +488,24 @@ export class ThreeConductor {
       this.atmosphere.rimLight.intensity = 0.0;
     }
 
+    if (p < 0.55) {
+      this.atmosphere.moonBounceLight.intensity = 0.0;
+    }
+
     // ----------------------------------------------------
     // UNIFIED CRAFT & STAGE KINEMATICS (Zero Allocations)
     // ----------------------------------------------------
     computeCraftState(p, this.craftDims, this._craftState);
+
+    // Dynamic upward-facing Moon-bounce light follows directly beneath lander
+    if (p >= 0.55) {
+      this.atmosphere.moonBounceLight.target.position.copy(this._craftState.landerWorldPos);
+      this.atmosphere.moonBounceLight.position.set(
+        this._craftState.landerWorldPos.x,
+        this._craftState.landerWorldPos.y - 20,
+        this._craftState.landerWorldPos.z
+      );
+    }
 
     // Apply rig position & orientation
     this.rocket.craftRig.position.copy(this._craftState.craftRigPos);
@@ -546,12 +562,15 @@ export class ThreeConductor {
     // ----------------------------------------------------
     // BEAT 4 & 5: FAIRING JETTISON, MOON GROWS & LANDER DEPLOY (0.45 - 0.62)
     // ----------------------------------------------------
-    this.atmosphere.approachMoon.visible = p >= 0.58 && p < 0.75;
+    // Photorealistic NASA LRO Moon globe remains visible until surface touchdown (p < 0.80)
+    this.atmosphere.approachMoon.visible = p >= 0.58 && p < 0.80;
     if (this.atmosphere.approachMoon.visible) {
-      const moonGrow = seg(p, 0.58, 0.75);
-      const moonScale = 0.4 + moonGrow * 1.8;
+      const moonGrow = seg(p, 0.58, 0.80);
+      const moonScale = 0.4 + moonGrow * 1.6;
+      const moonY = THREE.MathUtils.lerp(10, -22, ease(moonGrow));
+      const moonZ = THREE.MathUtils.lerp(-140, -42, ease(moonGrow));
       this.atmosphere.approachMoon.scale.set(moonScale, moonScale, moonScale);
-      this.atmosphere.approachMoon.position.set(0, 10, -140 + moonGrow * 85);
+      this.atmosphere.approachMoon.position.set(0, moonY, moonZ);
     }
 
     // Lander deployment state
@@ -563,9 +582,10 @@ export class ThreeConductor {
     // ----------------------------------------------------
     // BEAT 6: APPROACH & POWERED DESCENT (0.62 - 0.80)
     // ----------------------------------------------------
-    this.surface.group.visible = p > 0.60;
-    const surfaceRise = ease(seg(p, 0.60, 0.78));
-    this.surface.landingTerrain.position.y = (surfaceRise - 1.0) * 16.0;
+    // Hide old procedural crater terrain mesh clipping into bottom corners during descent:
+    // Only the photorealistic Moon globe is visible until surface touchdown (p >= 0.80)
+    this.surface.group.visible = p >= 0.80;
+    this.surface.landingTerrain.position.y = 0;
 
     // ----------------------------------------------------
     // BEAT 7: TOUCHDOWN & DUST (0.80 - 0.86)

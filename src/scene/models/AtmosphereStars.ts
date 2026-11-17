@@ -11,6 +11,7 @@ export class AtmosphereStars {
   public directionalSun: THREE.DirectionalLight;
   public ambientLight: THREE.AmbientLight;
   public rimLight: THREE.DirectionalLight;
+  public moonBounceLight: THREE.DirectionalLight;
 
   // Launch pad interactive elements
   public swingArm: THREE.Group;
@@ -45,6 +46,13 @@ export class AtmosphereStars {
     this.rimLight = new THREE.DirectionalLight(0x7dd3fc, 0.9);
     this.rimLight.position.set(-35, 25, -40);
     this.group.add(this.rimLight);
+
+    // Subtle upward-facing soft fill light (Moon-bounce albedo light under the lander)
+    this.moonBounceLight = new THREE.DirectionalLight(0xb4bcc8, 0.0);
+    this.moonBounceLight.position.set(0, -25, 0);
+    this.moonBounceLight.target.position.set(0, 0, 0);
+    this.group.add(this.moonBounceLight);
+    this.group.add(this.moonBounceLight.target);
 
     // 2. Launch Complex 39B Pad, Lattice Gantry Tower & Ground
     this.launchGround = new THREE.Group();
@@ -356,7 +364,7 @@ export class AtmosphereStars {
     // Orient near side with Oceanus Procellarum, Imbrium, and Tycho toward the camera
     moonMesh.rotation.y = Math.PI * 1.5;
     moonMesh.castShadow = true;
-    moonMesh.receiveShadow = true;
+    moonMesh.receiveShadow = false;
     this.approachMoon.add(moonMesh);
 
     // Position ahead along negative Z

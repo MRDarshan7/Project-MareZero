@@ -27,6 +27,7 @@ export class LanderModel {
   public engineFlame: THREE.Mesh;
   public engineLight: THREE.PointLight;
   public engineNozzle: THREE.Mesh;
+  public underLanderFill: THREE.PointLight;
 
   // Stored state
   private deployProgress: number = 0;
@@ -247,7 +248,7 @@ export class LanderModel {
     this.antennaDish.position.set(0.45, descentHeight + cabinHeight, -0.45);
     this.bodyGroup.add(this.antennaDish);
 
-    // --- 6. Throttleable Descent Engine Nozzle & Plume ---
+    // --- 6. Throttleable Descent Engine Nozzle & Blue/White Retro Plume ---
     this.engineNozzle = new THREE.Mesh(
       new THREE.ConeGeometry(0.5, 0.9, 16, 1, true),
       engineMetalMat
@@ -255,20 +256,83 @@ export class LanderModel {
     this.engineNozzle.position.y = 0.05;
     this.bodyGroup.add(this.engineNozzle);
 
+    // Layer 1: Supersonic outer expansion mantle (electric cyan-blue)
     const flameMat = new THREE.MeshBasicMaterial({
-      color: 0xffb833,
+      color: 0x38bdf8,
       transparent: true,
-      opacity: 0.92
+      opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
     });
-    this.engineFlame = new THREE.Mesh(new THREE.ConeGeometry(0.65, 1.8, 16), flameMat);
+    this.engineFlame = new THREE.Mesh(new THREE.ConeGeometry(0.48, 1.6, 20, 2, true), flameMat);
     this.engineFlame.rotation.x = Math.PI;
     this.engineFlame.position.y = -1.0;
+    this.engineFlame.castShadow = false;
+    this.engineFlame.receiveShadow = false;
     this.engineFlame.visible = false;
+
+    // Layer 2: Radiant ice-blue supersonic core
+    const coreGeo = new THREE.ConeGeometry(0.24, 1.1, 16, 1, true);
+    coreGeo.rotateX(Math.PI);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0x93c5fd,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    coreMesh.position.y = 0.22;
+    coreMesh.castShadow = false;
+    coreMesh.receiveShadow = false;
+    this.engineFlame.add(coreMesh);
+
+    // Layer 3: Incandescent white throat disc (at the nozzle exit throat)
+    const throatGeo = new THREE.ConeGeometry(0.12, 0.55, 12, 1, false);
+    throatGeo.rotateX(Math.PI);
+    const throatMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.98,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const throatMesh = new THREE.Mesh(throatGeo, throatMat);
+    throatMesh.position.y = 0.52;
+    throatMesh.castShadow = false;
+    throatMesh.receiveShadow = false;
+    this.engineFlame.add(throatMesh);
+
+    // Layer 4: Twin Supersonic Mach Shock Diamonds
+    for (let d = 0; d < 2; d++) {
+      const dGeo = new THREE.OctahedronGeometry(0.06 - d * 0.015, 0);
+      dGeo.scale(1, 1.8, 1);
+      const dMat = new THREE.MeshBasicMaterial({
+        color: 0xf0fdfa,
+        transparent: true,
+        opacity: 0.92 - d * 0.2,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const dMesh = new THREE.Mesh(dGeo, dMat);
+      dMesh.position.y = 0.25 - d * 0.35;
+      dMesh.castShadow = false;
+      dMesh.receiveShadow = false;
+      this.engineFlame.add(dMesh);
+    }
     this.bodyGroup.add(this.engineFlame);
 
-    this.engineLight = new THREE.PointLight(0xffa522, 0, 18, 1.8);
-    this.engineLight.position.set(0, -0.5, 0);
+    // Blue/white thruster illumination glow
+    this.engineLight = new THREE.PointLight(0x7dd3fc, 0, 14, 1.6);
+    this.engineLight.position.set(0, -0.6, 0);
     this.bodyGroup.add(this.engineLight);
+
+    // Soft upward-facing fill light under the descent stage to illuminate landing gear and bottom panels
+    this.underLanderFill = new THREE.PointLight(0xb0b8c6, 0.85, 7.5, 1.2);
+    this.underLanderFill.position.set(0, -0.45, 0);
+    this.bodyGroup.add(this.underLanderFill);
 
     // Set initial stowed pose (t = 0)
     this.setDeploy(0);
@@ -342,8 +406,10 @@ export class LanderModel {
       this.engineLight.intensity = 0;
     } else {
       this.engineFlame.visible = true;
-      this.engineFlame.scale.set(th, th * (1 + Math.random() * 0.2), th);
-      this.engineLight.intensity = th * 3.2;
+      // High-frequency subtle plume flutter
+      const flutter = 1.0 + Math.sin(Date.now() * 0.035) * 0.08;
+      this.engineFlame.scale.set(th * 0.82, th * 0.96 * flutter, th * 0.82);
+      this.engineLight.intensity = th * 2.8;
     }
   }
 }

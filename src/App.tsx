@@ -270,7 +270,11 @@ export default function App() {
       }
     };
     (window as any).__lunarDebug = api;
-    return () => { delete (window as any).__lunarDebug; };
+    (window as any).__lunarConductor = conductorRef.current;
+    return () => {
+      delete (window as any).__lunarDebug;
+      delete (window as any).__lunarConductor;
+    };
   }, [debug, renderNow]);
 
   return <div className={`lunar-experience ${dashboardVisible ? 'at-dashboard' : 'in-story'}`} data-story-enabled={storyEnabled}>
