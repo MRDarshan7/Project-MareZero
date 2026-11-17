@@ -74,15 +74,43 @@ export class SkyDomeScene {
     this.sunMarker = this.marker('#F2B84B');
     this.earthMarker = this.marker('#5FA8D3');
 
-    this.group.add(
-      this.domeWireframeGroup,
+    // Add dark semi-transparent inner dome curtain below the horizon silhouette line
+    const curtainGeo = new THREE.SphereGeometry(
+      this.radius * 0.995,
+      48,
+      24,
+      0,
+      Math.PI * 2,
+      0,
+      Math.PI / 2
+    );
+    const curtainMat = new THREE.MeshBasicMaterial({
+      color: 0x06080c,
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.BackSide,
+      depthWrite: false,
+      toneMapped: false
+    });
+    const curtainMesh = new THREE.Mesh(curtainGeo, curtainMat);
+    curtainMesh.name = 'InnerDomeCurtain';
+    curtainMesh.renderOrder = -2;
+    this.domeWireframeGroup.add(curtainMesh);
+
+    // Reparent all celestial elements inside domeWireframeGroup so they scale and lock together
+    this.domeWireframeGroup.add(
+      this.terrain,
       this.sunPathGroup,
       this.earthPathGroup,
       this.sunMarker,
       this.earthMarker,
       this.sunRay,
       this.earthRay,
-      this.occlusionCrosshair,
+      this.occlusionCrosshair
+    );
+
+    this.group.add(
+      this.domeWireframeGroup,
       this.hudLabelsGroup
     );
 
@@ -172,13 +200,21 @@ export class SkyDomeScene {
 
   private buildGraticule(): void {
     const material = new THREE.LineBasicMaterial({ color: '#ECE8DD', toneMapped: false, transparent: true, opacity: 0.14 });
-    for (const elevation of [0, 10, 20, 30, 60]) {
+    const baseCircleMat = new THREE.LineBasicMaterial({ color: '#ECE8DD', toneMapped: false, transparent: true, opacity: 0.38 });
+
+    // Elevation parallel rings (0° is accentuated as base boundary)
+    for (const elevation of [0, 5, 10, 20, 30, 45, 60, 75]) {
+      const isBase = elevation === 0;
       const points = Array.from({ length: 97 }, (_, i) => this.toCartesian((i / 96) * 360, elevation));
-      this.domeWireframeGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+      this.domeWireframeGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), isBase ? baseCircleMat : material));
     }
-    for (let az = 0; az < 360; az += 30) {
+
+    // Dense azimuth meridians every 15° so celestial bodies are visibly anchored to wireframe arcs
+    for (let az = 0; az < 360; az += 15) {
+      const isMajor = az % 90 === 0;
+      const azMat = isMajor ? baseCircleMat : material;
       const points = Array.from({ length: 31 }, (_, i) => this.toCartesian(az, i * 3));
-      this.domeWireframeGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+      this.domeWireframeGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), azMat));
     }
   }
 
@@ -278,8 +314,13 @@ export class SkyDomeScene {
     this.sun = sun;
     this.earth = earth;
 
+    // Clamp display elevation to >= 0.1° so markers strictly lock to the dome surface
+    // and never plunge below the ground plane disc
+    const sunEl = Math.max(0.1, this.displayElevation(sun.el));
+    const earthEl = Math.max(0.1, this.displayElevation(earth.el));
+
     // Sun Marker
-    this.toCartesian(sun.az, this.displayElevation(sun.el), this.radius, _scratchPos);
+    this.toCartesian(sun.az, sunEl, this.radius, _scratchPos);
     this.sunMarker.position.copy(_scratchPos);
     this.sunMarker.visible = true;
     const sunMat = (this.sunMarker.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
@@ -289,7 +330,7 @@ export class SkyDomeScene {
     this.sunMarker.children[1].visible = sun.isBlocked;
 
     // Earth Marker
-    this.toCartesian(earth.az, this.displayElevation(earth.el), this.radius, _scratchPos);
+    this.toCartesian(earth.az, earthEl, this.radius, _scratchPos);
     this.earthMarker.position.copy(_scratchPos);
     this.earthMarker.visible = true;
     const earthMat = (this.earthMarker.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
@@ -306,13 +347,15 @@ export class SkyDomeScene {
     const tanFov = Math.tan((camera.fov * Math.PI) / 360);
 
     // Sun marker (ratio 1)
-    const sunDist = camera.position.distanceTo(this.sunMarker.position);
+    this.sunMarker.getWorldPosition(_scratchPos);
+    const sunDist = camera.position.distanceTo(_scratchPos);
     const sunUnitsPerPixel = (2 * sunDist * tanFov) / vh;
     this.sunMarker.scale.setScalar(sunUnitsPerPixel * sunPixels);
     this.sunMarker.children[1].quaternion.copy(camera.quaternion);
 
     // Earth marker (ratio 1.9 / 0.53)
-    const earthDist = camera.position.distanceTo(this.earthMarker.position);
+    this.earthMarker.getWorldPosition(_scratchPos);
+    const earthDist = camera.position.distanceTo(_scratchPos);
     const earthUnitsPerPixel = (2 * earthDist * tanFov) / vh;
     this.earthMarker.scale.setScalar(earthUnitsPerPixel * sunPixels * (1.9 / 0.53));
     this.earthMarker.children[1].quaternion.copy(camera.quaternion);

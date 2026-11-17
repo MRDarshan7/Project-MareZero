@@ -41,8 +41,10 @@ export function DomeLabels({ scene, position, story = false }: { scene: SceneBri
         const x = ((_labelPoint.x + 1) / 2) * width;
         const y = ((1 - _labelPoint.y) / 2) * height;
         const lw = labelWidths.current.sun;
-        sunLabel.current.style.left = Math.max(12, Math.min(width - lw - 12, x - lw / 2)) + 'px';
-        sunLabel.current.style.top = Math.max(12, Math.min(height - 34, y - 28)) + 'px';
+        const offsetX = x < width * 0.45 ? 10 : (x > width * 0.55 ? -lw - 10 : -lw / 2);
+        const offsetY = x < width * 0.45 ? -40 : -28;
+        sunLabel.current.style.left = Math.max(12, Math.min(width - lw - 12, x + offsetX)) + 'px';
+        sunLabel.current.style.top = Math.max(12, Math.min(height - 34, y + offsetY)) + 'px';
       }
 
       // 2. Earth Label
@@ -52,7 +54,8 @@ export function DomeLabels({ scene, position, story = false }: { scene: SceneBri
         const x = ((_labelPoint.x + 1) / 2) * width;
         const y = ((1 - _labelPoint.y) / 2) * height;
         const lw = labelWidths.current.earth;
-        earthLabel.current.style.left = Math.max(12, Math.min(width - lw - 12, x - lw / 2)) + 'px';
+        const offsetX = x < width * 0.45 ? 14 : (x > width * 0.55 ? -lw - 14 : -lw / 2);
+        earthLabel.current.style.left = Math.max(12, Math.min(width - lw - 12, x + offsetX)) + 'px';
         earthLabel.current.style.top = Math.max(12, Math.min(height - 34, y + 26)) + 'px';
       }
 
@@ -60,10 +63,11 @@ export function DomeLabels({ scene, position, story = false }: { scene: SceneBri
       for (let index = 0; index < 4; index++) {
         const node = cardinals.current[index];
         if (!node) continue;
-        conductor.skyDome.toCartesian(CARDINAL_AZ[index], 0, 17.4, _labelPoint);
+        conductor.skyDome.toCartesian(CARDINAL_AZ[index], 0, 16.2, _labelPoint);
+        _labelPoint.applyMatrix4(conductor.skyDome.domeWireframeGroup.matrixWorld);
         _labelPoint.project(conductor.camera);
-        node.style.left = Math.max(10, Math.min(width - 20, ((_labelPoint.x + 1) / 2) * width)) + 'px';
-        node.style.top = Math.max(10, Math.min(height - 20, ((1 - _labelPoint.y) / 2) * height)) + 'px';
+        node.style.left = Math.max(12, Math.min(width - 24, ((_labelPoint.x + 1) / 2) * width)) + 'px';
+        node.style.top = Math.max(12, Math.min(height - 24, ((1 - _labelPoint.y) / 2) * height)) + 'px';
       }
 
       // 4. Height Exaggeration Note

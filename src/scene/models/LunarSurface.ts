@@ -4,6 +4,75 @@ import { createLunarRegolithMaterial } from '../materials/RocketTextures';
 import { DeterministicPRNG } from '../materials/CelestialTextures';
 
 /**
+ * Creates a precision circular disc BufferGeometry with concentric rings and a downward side skirt.
+ * Perfectly matches the circular radius of the Sky-Dome base with zero sharp square corners.
+ */
+function createCircularTerrainDisc(radius: number, rings: number, segments: number, depth: number = 0.45): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  // Top surface: center vertex
+  positions.push(0, 0, 0);
+  uvs.push(0.5, 0.5);
+
+  // Top concentric rings
+  for (let r = 1; r <= rings; r++) {
+    const rad = (r / rings) * radius;
+    for (let s = 0; s < segments; s++) {
+      const th = (s / segments) * Math.PI * 2;
+      const x = Math.cos(th) * rad;
+      const z = Math.sin(th) * rad;
+      positions.push(x, 0, z);
+      uvs.push((x / radius) * 0.5 + 0.5, (z / radius) * 0.5 + 0.5);
+    }
+  }
+
+  // Inner ring faces
+  for (let s = 0; s < segments; s++) {
+    const nextS = (s + 1) % segments;
+    indices.push(0, 1 + nextS, 1 + s);
+  }
+
+  // Subsequent concentric rings
+  for (let r = 1; r < rings; r++) {
+    const rowA = 1 + (r - 1) * segments;
+    const rowB = 1 + r * segments;
+    for (let s = 0; s < segments; s++) {
+      const nextS = (s + 1) % segments;
+      indices.push(rowA + s, rowA + nextS, rowB + nextS);
+      indices.push(rowA + s, rowB + nextS, rowB + s);
+    }
+  }
+
+  // Outer rim side skirt
+  const outerRow = 1 + (rings - 1) * segments;
+  const bottomOffset = positions.length / 3;
+  for (let s = 0; s < segments; s++) {
+    const th = (s / segments) * Math.PI * 2;
+    positions.push(Math.cos(th) * radius, -depth, Math.sin(th) * radius);
+    uvs.push(s / segments, 0);
+  }
+
+  for (let s = 0; s < segments; s++) {
+    const nextS = (s + 1) % segments;
+    const topA = outerRow + s;
+    const topB = outerRow + nextS;
+    const botA = bottomOffset + s;
+    const botB = bottomOffset + nextS;
+    indices.push(topA, topB, botB);
+    indices.push(topA, botB, botA);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
  * 3D Photorealistic Lunar Terrain & Precision Sky-Dome Base Disc
  * 
  * Features:
@@ -85,15 +154,14 @@ export class LunarSurface {
     const regolithMaterial = createLunarRegolithMaterial();
 
     // ========================================================
-    // 2. MULTI-OCTAVE PROCEDURAL TERRAIN & CRATER MESH
+    // 2. MULTI-OCTAVE PROCEDURAL TERRAIN (CIRCULAR DISC)
     // ========================================================
-    const terrainSize = 90;
-    const terrainSegments = 96;
-    const terrainGeo = new THREE.PlaneGeometry(terrainSize, terrainSize, terrainSegments, terrainSegments);
-    terrainGeo.rotateX(-Math.PI / 2);
+    const terrainRadius = 16.0;
+    const terrainGeo = createCircularTerrainDisc(terrainRadius, 48, 96, 0.45);
 
     const pos = terrainGeo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
+    const topCount = 1 + 48 * 96;
+    for (let i = 0; i < topCount; i++) {
       const x = pos.getX(i);
       const z = pos.getZ(i);
 
@@ -108,39 +176,34 @@ export class LunarSurface {
       if (dCenter < 3.2) {
         y *= Math.pow(dCenter / 3.2, 2.0);
       } else {
-        // Primary Impact Crater 1: South-West Complex Basin
-        const c1Dist = Math.hypot(x - 14, z - 10);
-        if (c1Dist < 10) {
-          const normDist = c1Dist / 10;
+        // Natural depression crater 1
+        const c1Dist = Math.hypot(x - 8, z - 6);
+        if (c1Dist < 6) {
+          const normDist = c1Dist / 6;
           if (normDist < 0.75) {
-            // Excavation bowl
-            y -= Math.cos((normDist / 0.75) * (Math.PI / 2)) * 2.2;
+            y -= Math.cos((normDist / 0.75) * (Math.PI / 2)) * 1.5;
           } else {
-            // Raised ejecta rim crest
             const rimFactor = Math.sin(((normDist - 0.75) / 0.25) * Math.PI);
-            y += rimFactor * 0.45;
+            y += rimFactor * 0.35;
           }
         }
 
-        // Secondary Impact Crater 2: North-East Deep Micro-Cold Trap
-        const c2Dist = Math.hypot(x + 18, z + 12);
-        if (c2Dist < 12) {
-          const normDist = c2Dist / 12;
+        // Natural depression crater 2
+        const c2Dist = Math.hypot(x + 9, z + 7);
+        if (c2Dist < 6.5) {
+          const normDist = c2Dist / 6.5;
           if (normDist < 0.78) {
-            y -= Math.cos((normDist / 0.78) * (Math.PI / 2)) * 2.8;
+            y -= Math.cos((normDist / 0.78) * (Math.PI / 2)) * 1.8;
           } else {
             const rimFactor = Math.sin(((normDist - 0.78) / 0.22) * Math.PI);
-            y += rimFactor * 0.55;
+            y += rimFactor * 0.40;
           }
         }
-
-        // Tertiary Degraded Slump Crater 3
-        const c3Dist = Math.hypot(x + 8, z - 20);
-        if (c3Dist < 7) {
-          const normDist = c3Dist / 7;
-          y -= (1 - normDist) * 1.2;
-        }
       }
+
+      // Smooth radial falloff so terrain perimeter cleanly flushes with the 16.0m boundary
+      const edgeFactor = Math.max(0, Math.min(1, (16.0 - dCenter) / 2.5));
+      y *= edgeFactor;
 
       pos.setY(i, y);
     }
@@ -185,8 +248,8 @@ export class LunarSurface {
     };
 
     for (let i = 0; i < boulderCount; i++) {
-      // Scatter outside 3.5m radius from landing center
-      const rad = 4.0 + Math.pow(rnd(), 1.6) * 32.0;
+      // Scatter outside 3.8m radius from landing center and strictly inside 14.2m
+      const rad = 3.8 + Math.pow(rnd(), 1.5) * 10.4;
       const th = rnd() * Math.PI * 2;
       const bx = Math.sin(th) * rad;
       const bz = Math.cos(th) * rad;
@@ -209,56 +272,75 @@ export class LunarSurface {
     // 4. CIRCULAR SKY-DOME BASE DISC
     // ========================================================
     const discRadius = 16.0;
-    const discGeo = new THREE.CylinderGeometry(discRadius, discRadius, 0.45, 64);
+    const discGeo = createCircularTerrainDisc(discRadius, 48, 96, 0.45);
+    const discPos = discGeo.attributes.position;
+    const discTopCount = 1 + 48 * 96;
+
+    // Natural geological impact crater depressions (replaces artificial torus rings)
+    const domeCraters = [
+      { x: -5.6, z: 4.8, r: 2.2, depth: 0.38 },
+      { x: 6.2, z: 5.1, r: 2.0, depth: 0.35 },
+      { x: 7.5, z: -4.5, r: 2.5, depth: 0.42 },
+      { x: -7.0, z: -5.2, r: 1.8, depth: 0.32 },
+      { x: 1.2, z: 8.5, r: 1.6, depth: 0.28 },
+      { x: -2.8, z: 9.8, r: 1.4, depth: 0.24 },
+      { x: 10.2, z: 1.5, r: 1.9, depth: 0.34 },
+      { x: -9.8, z: 2.2, r: 1.7, depth: 0.30 },
+      { x: -4.2, z: -9.5, r: 1.5, depth: 0.26 },
+      { x: 4.5, z: -9.2, r: 1.6, depth: 0.28 },
+      { x: 8.8, z: 7.2, r: 1.3, depth: 0.22 },
+      { x: -8.5, z: -8.0, r: 1.4, depth: 0.22 }
+    ];
+
+    for (let i = 0; i < discTopCount; i++) {
+      const x = discPos.getX(i);
+      const z = discPos.getZ(i);
+      const dCenter = Math.hypot(x, z);
+
+      if (dCenter <= 3.8) {
+        // Completely flat pad for lander footprint: zero clipping into legs
+        discPos.setY(i, 0);
+      } else {
+        let y = Math.sin(x * 0.35 + z * 0.28) * 0.05 + Math.cos(x * 0.65 - z * 0.52) * 0.035;
+
+        for (const c of domeCraters) {
+          const dist = Math.hypot(x - c.x, z - c.z);
+          const u = dist / c.r;
+          if (u < 2.0) {
+            y -= c.depth * Math.exp(-2.8 * u * u);
+            y += 0.14 * c.depth * Math.exp(-12.0 * Math.pow(u - 1.05, 2));
+          }
+        }
+
+        // Smooth transition outside landing pad
+        const padFactor = Math.min(1.0, Math.max(0.0, (dCenter - 3.8) / 1.0));
+        y *= padFactor;
+
+        // Smooth edge falloff to disc boundary
+        const rimEdgeFactor = Math.min(1.0, Math.max(0.0, (16.0 - dCenter) / 1.8));
+        y *= rimEdgeFactor;
+
+        discPos.setY(i, y);
+      }
+    }
+    discGeo.computeVertexNormals();
+
     const discMat = createLunarRegolithMaterial(4, 4);
+    discMat.color.setHex(0x16181f); // Darkened matte lunar regolith for crisp wireframe and label contrast
+    discMat.roughness = 0.96;
+    discMat.metalness = 0.02;
+
     this.domeBaseDisc = new THREE.Mesh(discGeo, discMat);
     this.domeBaseDisc.name = 'DomeBaseDisc';
-    this.domeBaseDisc.position.y = -0.22;
+    this.domeBaseDisc.position.set(0, 0, 0);
     this.domeBaseDisc.receiveShadow = true;
     this.domeBaseDisc.castShadow = true;
     this.domeBaseDisc.visible = false;
     this.group.add(this.domeBaseDisc);
 
-    // Realistic geological craters on base disc (matching CSA Moon Exploration showcase)
+    // Empty CraterGroup preserved for backwards compatibility and theme triggers
     this.craterGroup = new THREE.Group();
     this.craterGroup.name = 'CraterGroup';
-
-    const discPrng = new DeterministicPRNG(19690720);
-    const rimMat = createLunarRegolithMaterial(2, 2);
-    const bowlMat = new THREE.MeshStandardMaterial({
-      color: 0x181a20,
-      roughness: 0.98,
-      metalness: 0.02
-    });
-
-    for (let i = 0; i < 20; i++) {
-      const r = 3.4 + discPrng.next() * 11.2;
-      const th = discPrng.next() * Math.PI * 2;
-      const cx = Math.cos(th) * r;
-      const cz = Math.sin(th) * r;
-      const craterR = 0.55 + discPrng.next() * 1.6;
-
-      const singleCrater = new THREE.Group();
-      singleCrater.position.set(cx, 0.22, cz);
-
-      // Raised ejecta rim ring (catches low-angle polar sunlight and casts shadow)
-      const rimGeo = new THREE.TorusGeometry(craterR, craterR * 0.16, 12, 24);
-      rimGeo.rotateX(Math.PI / 2);
-      const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-      rimMesh.position.y = craterR * 0.08;
-      rimMesh.castShadow = true;
-      rimMesh.receiveShadow = true;
-      singleCrater.add(rimMesh);
-
-      // Sunken dark interior bowl
-      const bowlGeo = new THREE.CylinderGeometry(craterR * 0.82, craterR * 0.3, craterR * 0.35, 20);
-      const bowlMesh = new THREE.Mesh(bowlGeo, bowlMat);
-      bowlMesh.position.y = -craterR * 0.12;
-      bowlMesh.receiveShadow = true;
-      singleCrater.add(bowlMesh);
-
-      this.craterGroup.add(singleCrater);
-    }
     this.domeBaseDisc.add(this.craterGroup);
 
     // Build the 3D extruded LOLA terrain skyline wall
@@ -313,7 +395,7 @@ export class LunarSurface {
    */
   public setMorphProgress(progress: number): void {
     const p = Math.max(0, Math.min(1, progress));
-    this.landingTerrain.visible = p < 0.99;
+    this.landingTerrain.visible = p < 0.3;
     this.landingTerrain.scale.set(1 - p * 0.7, 1 - p * 0.7, 1 - p * 0.7);
 
     this.domeBaseDisc.visible = p > 0.05;
