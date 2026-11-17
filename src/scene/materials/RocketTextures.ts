@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DeterministicPRNG } from './CelestialTextures';
 
 /**
  * Minimal in-memory 2D canvas context for Node.js / headless test environments.
@@ -277,6 +278,8 @@ export class RocketTextures {
   private static kaptonNormalMap: THREE.Texture | null = null;
   private static solarCellTexture: THREE.Texture | null = null;
   private static carbonWeaveTexture: THREE.Texture | null = null;
+  private static regolithAlbedoTexture: THREE.Texture | null = null;
+  private static regolithNormalMap: THREE.Texture | null = null;
   private static regolithBumpMap: THREE.Texture | null = null;
   private static indianFlagTexture: THREE.Texture | null = null;
   private static marezeroTexture: THREE.Texture | null = null;
@@ -546,36 +549,291 @@ export class RocketTextures {
     return texture;
   }
 
-  public static getRegolithBumpMap(): THREE.Texture {
-    if (this.regolithBumpMap) return this.regolithBumpMap;
-    if (typeof document === 'undefined') return new THREE.Texture();
+  /**
+   * Generates seamless 1024x1024 polar lunar regolith PBR maps:
+   * 1. Albedo map: authentic titanium/iron-bearing basalt & anorthosite tones, micro-craters, bright ejecta rays
+   * 2. Tangent-space Normal map: multi-octave relief with raised crater rims & micro-depression shadows under grazing polar sun
+   * 3. Displacement / Bump map: elevation heightfield for micro-relief
+   * Cached statically for zero GC runtime performance.
+   */
+  private static generateRegolithMaps(): void {
+    if (this.regolithAlbedoTexture && this.regolithNormalMap && this.regolithBumpMap) return;
+    if (typeof document === 'undefined') return;
 
-    const size = 512;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d')!;
+    const size = 1024;
+    const prng = new DeterministicPRNG(19690720);
 
-    ctx.fillStyle = '#808080';
-    ctx.fillRect(0, 0, size, size);
+    // 1. Compute Seamless 2D Toroidal Heightfield
+    const heightField = new Float32Array(size * size);
+    const twoPi = Math.PI * 2;
 
-    for (let i = 0; i < 6000; i++) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      const r = 0.5 + Math.random() * 2.5;
-      const lum = Math.random() > 0.5 ? 255 : 0;
-      ctx.fillStyle = `rgba(${lum}, ${lum}, ${lum}, 0.2)`;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
+    for (let y = 0; y < size; y++) {
+      const v = y / size;
+      for (let x = 0; x < size; x++) {
+        const u = x / size;
+        const idx = y * size + x;
+
+        // Base periodic harmonic undulations (seamless integer frequencies)
+        let elev = 0.50;
+        elev += 0.045 * Math.sin(twoPi * 2 * u) * Math.cos(twoPi * 2 * v);
+        elev += 0.030 * Math.sin(twoPi * 5 * u + 1.2) * Math.sin(twoPi * 4 * v);
+        elev += 0.018 * Math.cos(twoPi * 9 * u) * Math.cos(twoPi * 8 * v);
+        elev += 0.009 * Math.sin(twoPi * 17 * u - 0.7) * Math.sin(twoPi * 15 * v);
+        elev += 0.004 * Math.sin(twoPi * 31 * u + 2.1) * Math.cos(twoPi * 29 * v);
+
+        heightField[idx] = elev;
+      }
     }
 
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(8, 8);
-    this.regolithBumpMap = texture;
-    return texture;
+    // 2. Seamless Micro & Medium Impact Craters
+    const craters: Array<{ cx: number; cy: number; r: number; bowl: number; rim: number }> = [];
+    // 6 prominent medium craters
+    for (let i = 0; i < 6; i++) {
+      craters.push({
+        cx: prng.next() * size,
+        cy: prng.next() * size,
+        r: 28 + prng.next() * 26,
+        bowl: 0.32 + prng.next() * 0.12,
+        rim: 0.22 + prng.next() * 0.10
+      });
+    }
+    // 75 secondary micro-craters
+    for (let i = 0; i < 75; i++) {
+      craters.push({
+        cx: prng.next() * size,
+        cy: prng.next() * size,
+        r: 6 + prng.next() * 16,
+        bowl: 0.20 + prng.next() * 0.14,
+        rim: 0.14 + prng.next() * 0.09
+      });
+    }
+
+    for (const c of craters) {
+      const cr = c.r;
+      const extent = Math.ceil(cr * 1.5);
+      const minX = Math.floor(c.cx - extent);
+      const maxX = Math.ceil(c.cx + extent);
+      const minY = Math.floor(c.cy - extent);
+      const maxY = Math.ceil(c.cy + extent);
+
+      for (let py = minY; py <= maxY; py++) {
+        // Toroidal wrapping
+        const wy = ((py % size) + size) % size;
+        const dy = Math.abs(py - c.cy);
+
+        for (let px = minX; px <= maxX; px++) {
+          const wx = ((px % size) + size) % size;
+          const dx = Math.abs(px - c.cx);
+          const dist = Math.hypot(dx, dy);
+
+          if (dist < cr * 0.8) {
+            // Excavation bowl
+            const u = dist / (cr * 0.8);
+            const bowlDrop = c.bowl * Math.cos(u * (Math.PI / 2));
+            const idx = wy * size + wx;
+            heightField[idx] = Math.max(0.04, heightField[idx] - bowlDrop);
+          } else if (dist < cr * 1.35) {
+            // Raised ejecta rim ring
+            const u = (dist - cr * 0.8) / (cr * 0.55);
+            const rimLift = c.rim * Math.sin(u * Math.PI);
+            const idx = wy * size + wx;
+            heightField[idx] = Math.min(0.98, heightField[idx] + rimLift);
+          }
+        }
+      }
+    }
+
+    // 3. Generate Tangent-Space Normal Map (Sobel gradient filter with toroidal boundaries)
+    const normalCanvas = document.createElement('canvas');
+    normalCanvas.width = size;
+    normalCanvas.height = size;
+    const normalCtx = normalCanvas.getContext('2d')!;
+    const normalImg = normalCtx.createImageData(size, size);
+    const nData = normalImg.data;
+    const normalStrength = 4.2;
+
+    for (let y = 0; y < size; y++) {
+      const y0 = (y - 1 + size) % size;
+      const y1 = (y + 1) % size;
+
+      for (let x = 0; x < size; x++) {
+        const x0 = (x - 1 + size) % size;
+        const x1 = (x + 1) % size;
+
+        const dzdx = (heightField[y * size + x1] - heightField[y * size + x0]) * normalStrength;
+        const dzdy = (heightField[y1 * size + x] - heightField[y0 * size + x]) * normalStrength;
+
+        const invLen = 1.0 / Math.sqrt(dzdx * dzdx + dzdy * dzdy + 1.0);
+        const nx = -dzdx * invLen;
+        const ny = -dzdy * invLen;
+        const nz = invLen;
+
+        const pIdx = (y * size + x) * 4;
+        nData[pIdx] = Math.round((nx * 0.5 + 0.5) * 255);
+        nData[pIdx + 1] = Math.round((ny * 0.5 + 0.5) * 255);
+        nData[pIdx + 2] = Math.round((nz * 0.5 + 0.5) * 255);
+        nData[pIdx + 3] = 255;
+      }
+    }
+    normalCtx.putImageData(normalImg, 0, 0);
+
+    const normalTex = new THREE.CanvasTexture(normalCanvas);
+    normalTex.wrapS = THREE.RepeatWrapping;
+    normalTex.wrapT = THREE.RepeatWrapping;
+    normalTex.generateMipmaps = true;
+    normalTex.minFilter = THREE.LinearMipmapLinearFilter;
+    normalTex.magFilter = THREE.LinearFilter;
+    this.regolithNormalMap = normalTex;
+
+    // 4. Generate Displacement / Elevation Bump Map
+    const bumpCanvas = document.createElement('canvas');
+    bumpCanvas.width = size;
+    bumpCanvas.height = size;
+    const bumpCtx = bumpCanvas.getContext('2d')!;
+    const bumpImg = bumpCtx.createImageData(size, size);
+    const bData = bumpImg.data;
+
+    for (let i = 0; i < size * size; i++) {
+      const val = Math.round(heightField[i] * 255);
+      const bIdx = i * 4;
+      bData[bIdx] = val;
+      bData[bIdx + 1] = val;
+      bData[bIdx + 2] = val;
+      bData[bIdx + 3] = 255;
+    }
+    bumpCtx.putImageData(bumpImg, 0, 0);
+
+    const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+    bumpTex.wrapS = THREE.RepeatWrapping;
+    bumpTex.wrapT = THREE.RepeatWrapping;
+    bumpTex.generateMipmaps = true;
+    bumpTex.minFilter = THREE.LinearMipmapLinearFilter;
+    bumpTex.magFilter = THREE.LinearFilter;
+    this.regolithBumpMap = bumpTex;
+
+    // 5. Generate High-Resolution Albedo (Diffuse) Map
+    const albedoCanvas = document.createElement('canvas');
+    albedoCanvas.width = size;
+    albedoCanvas.height = size;
+    const aCtx = albedoCanvas.getContext('2d')!;
+
+    // Base tone: natural silver-grey lunar regolith
+    aCtx.fillStyle = '#686c76';
+    aCtx.fillRect(0, 0, size, size);
+
+    // Subtle patchy mineral variance (anorthosite vs basaltic fines)
+    const patchPrng = new DeterministicPRNG(19710730);
+    for (let p = 0; p < 24; p++) {
+      const px = patchPrng.next() * size;
+      const py = patchPrng.next() * size;
+      const pr = 40 + patchPrng.next() * 90;
+      const isDark = patchPrng.next() > 0.45;
+      const pGrad = aCtx.createRadialGradient(px, py, 0, px, py, pr);
+      pGrad.addColorStop(0.0, isDark ? 'rgba(52, 55, 62, 0.42)' : 'rgba(132, 137, 148, 0.35)');
+      pGrad.addColorStop(1.0, 'rgba(104, 108, 118, 0.0)');
+      aCtx.fillStyle = pGrad;
+      aCtx.beginPath();
+      aCtx.arc(px, py, pr, 0, Math.PI * 2);
+      aCtx.fill();
+    }
+
+    // Paint crater bowls (darkened floor) and rims (brightened impact shock)
+    for (const c of craters) {
+      // Excavation bowl
+      const bowlGrad = aCtx.createRadialGradient(c.cx, c.cy, 0, c.cx, c.cy, c.r * 0.85);
+      bowlGrad.addColorStop(0.0, 'rgba(40, 43, 50, 0.65)');
+      bowlGrad.addColorStop(0.85, 'rgba(65, 69, 78, 0.40)');
+      bowlGrad.addColorStop(1.0, 'rgba(104, 108, 118, 0.0)');
+      aCtx.fillStyle = bowlGrad;
+      aCtx.beginPath();
+      aCtx.arc(c.cx, c.cy, c.r * 0.85, 0, Math.PI * 2);
+      aCtx.fill();
+
+      // Rim highlight
+      aCtx.strokeStyle = 'rgba(215, 222, 235, 0.55)';
+      aCtx.lineWidth = Math.max(1.5, c.r * 0.16);
+      aCtx.beginPath();
+      aCtx.arc(c.cx, c.cy, c.r * 0.95, 0, Math.PI * 2);
+      aCtx.stroke();
+
+      // Delicate micro-ejecta rays for prominent craters (r > 20)
+      if (c.r > 20) {
+        for (let ray = 0; ray < 14; ray++) {
+          const ang = (ray / 14) * Math.PI * 2 + (patchPrng.next() - 0.5) * 0.25;
+          const rayLen = c.r * (1.2 + patchPrng.next() * 1.8);
+          aCtx.strokeStyle = `rgba(225, 232, 245, ${0.18 + patchPrng.next() * 0.22})`;
+          aCtx.lineWidth = 1.2;
+          aCtx.beginPath();
+          aCtx.moveTo(c.cx + Math.cos(ang) * (c.r * 0.9), c.cy + Math.sin(ang) * (c.r * 0.9));
+          aCtx.lineTo(c.cx + Math.cos(ang) * (c.r * 0.9 + rayLen), c.cy + Math.sin(ang) * (c.r * 0.9 + rayLen));
+          aCtx.stroke();
+        }
+      }
+    }
+
+    // Regolith dust speckles
+    const dustCount = 12000;
+    for (let i = 0; i < dustCount; i++) {
+      const rx = patchPrng.next() * size;
+      const ry = patchPrng.next() * size;
+      const isLight = patchPrng.next() > 0.5;
+      const alpha = 0.04 + patchPrng.next() * 0.06;
+      aCtx.fillStyle = isLight ? `rgba(240, 245, 255, ${alpha})` : `rgba(20, 23, 28, ${alpha})`;
+      aCtx.fillRect(rx, ry, 2, 2);
+    }
+
+    const albedoTex = new THREE.CanvasTexture(albedoCanvas);
+    albedoTex.wrapS = THREE.RepeatWrapping;
+    albedoTex.wrapT = THREE.RepeatWrapping;
+    albedoTex.generateMipmaps = true;
+    albedoTex.minFilter = THREE.LinearMipmapLinearFilter;
+    albedoTex.magFilter = THREE.LinearFilter;
+    this.regolithAlbedoTexture = albedoTex;
+  }
+
+  public static getRegolithAlbedoTexture(repeatU: number = 8, repeatV: number = 8): THREE.Texture {
+    if (!this.regolithAlbedoTexture) {
+      this.generateRegolithMaps();
+    }
+    if (typeof document === 'undefined') return new THREE.Texture();
+    if (repeatU === 8 && repeatV === 8) {
+      this.regolithAlbedoTexture!.repeat.set(8, 8);
+      return this.regolithAlbedoTexture!;
+    }
+    const tex = this.regolithAlbedoTexture!.clone();
+    tex.repeat.set(repeatU, repeatV);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  public static getRegolithNormalMap(repeatU: number = 8, repeatV: number = 8): THREE.Texture {
+    if (!this.regolithNormalMap) {
+      this.generateRegolithMaps();
+    }
+    if (typeof document === 'undefined') return new THREE.Texture();
+    if (repeatU === 8 && repeatV === 8) {
+      this.regolithNormalMap!.repeat.set(8, 8);
+      return this.regolithNormalMap!;
+    }
+    const tex = this.regolithNormalMap!.clone();
+    tex.repeat.set(repeatU, repeatV);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  public static getRegolithBumpMap(repeatU: number = 8, repeatV: number = 8): THREE.Texture {
+    if (!this.regolithBumpMap) {
+      this.generateRegolithMaps();
+    }
+    if (typeof document === 'undefined') return new THREE.Texture();
+    if (repeatU === 8 && repeatV === 8) {
+      this.regolithBumpMap!.repeat.set(8, 8);
+      return this.regolithBumpMap!;
+    }
+    const tex = this.regolithBumpMap!.clone();
+    tex.repeat.set(repeatU, repeatV);
+    tex.needsUpdate = true;
+    return tex;
   }
 
   /**
@@ -794,16 +1052,24 @@ export function createSolarCellMaterial(): THREE.MeshStandardMaterial {
 }
 
 /**
- * Creates Hapke / Lommel-Seeliger regolith material
- * High roughness (0.95), zero metalness, dark volcanic albedo, micro-grain bump mapping
+ * Creates Hapke / Lommel-Seeliger regolith material with full PBR albedo, normal, and bump mapping.
+ * Matches Canadian Space Agency cinematic lunar surface exploration visual standards.
+ * Produces crisp, deep shadow relief under low-angle grazing polar sunlight.
  */
-export function createLunarRegolithMaterial(): THREE.MeshStandardMaterial {
+export function createLunarRegolithMaterial(repeatU: number = 8, repeatV: number = 8): THREE.MeshStandardMaterial {
+  const albedo = RocketTextures.getRegolithAlbedoTexture(repeatU, repeatV);
+  const normal = RocketTextures.getRegolithNormalMap(repeatU, repeatV);
+  const bump = RocketTextures.getRegolithBumpMap(repeatU, repeatV);
+
   return new THREE.MeshStandardMaterial({
-    color: 0x5a5d64,
-    roughness: 0.95,
-    metalness: 0.02,
-    bumpMap: RocketTextures.getRegolithBumpMap(),
-    bumpScale: 0.08,
+    color: 0x8a8d95,
+    map: albedo,
+    normalMap: normal,
+    normalScale: new THREE.Vector2(2.0, 2.0),
+    bumpMap: bump,
+    bumpScale: 0.12,
+    roughness: 0.94,
+    metalness: 0.04,
     flatShading: false
   });
 }

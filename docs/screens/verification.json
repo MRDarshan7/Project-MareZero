@@ -33,7 +33,7 @@
         "p": 0,
         "target": 0,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           1,
@@ -108,7 +108,7 @@
         "p": 0.25,
         "target": 0.25,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           1,
@@ -183,7 +183,7 @@
         "p": 0.45,
         "target": 0.45,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           1,
@@ -258,7 +258,7 @@
         "p": 0.78,
         "target": 0.78,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           1,
@@ -333,7 +333,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           0.65,
@@ -378,8 +378,8 @@
     {
       "width": 1440,
       "reverseIdentical": true,
-      "hashBefore": "08c2fb80687864fedc40c44526a3fafa36629a618703ba6f8782d81618291765",
-      "hashAfter": "08c2fb80687864fedc40c44526a3fafa36629a618703ba6f8782d81618291765"
+      "hashBefore": "74e98742f9868583b7c35a85565d3797fa4e8213e02495d711ea563b8ee4d308",
+      "hashAfter": "74e98742f9868583b7c35a85565d3797fa4e8213e02495d711ea563b8ee4d308"
     },
     {
       "file": "handoff-1440x900.png",
@@ -393,7 +393,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": true,
         "lander": [
           0.65,
@@ -451,7 +451,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": true,
         "lander": [
           0.65,
@@ -617,7 +617,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": true,
         "lander": [
           0.65,
@@ -671,7 +671,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": true,
         "lander": [
           0.65,
@@ -751,7 +751,7 @@
         "p": 0,
         "target": 0,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           1,
@@ -826,7 +826,7 @@
         "p": 0.25,
         "target": 0.25,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           1,
@@ -901,7 +901,7 @@
         "p": 0.44994075829383884,
         "target": 0.44994075829383884,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           1,
@@ -976,7 +976,7 @@
         "p": 0.7799170616113744,
         "target": 0.7799170616113744,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           1,
@@ -1051,7 +1051,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": false,
         "lander": [
           0.65,
@@ -1096,8 +1096,8 @@
     {
       "width": 390,
       "reverseIdentical": true,
-      "hashBefore": "d755d49a43981e13fdd4e1e09f57414d73d18ae47319456d6cb4a0d31396ef44",
-      "hashAfter": "d755d49a43981e13fdd4e1e09f57414d73d18ae47319456d6cb4a0d31396ef44"
+      "hashBefore": "299c1f6ab34b662dcbeffb6ed8e472c8494f6c453f0d4a36bd881c0e66007e26",
+      "hashAfter": "299c1f6ab34b662dcbeffb6ed8e472c8494f6c453f0d4a36bd881c0e66007e26"
     },
     {
       "file": "handoff-390x844.png",
@@ -1111,7 +1111,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": true,
         "lander": [
           0.65,
@@ -1169,7 +1169,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": true,
         "lander": [
           0.65,
@@ -1223,7 +1223,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": true,
         "lander": [
           0.65,
@@ -1497,7 +1497,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": true,
         "lander": [
           0.65,
@@ -1551,7 +1551,7 @@
         "p": 1,
         "target": 1,
         "site": "shackleton-connecting-ridge",
-        "date": "2026-11-16T00:00:00.000Z",
+        "date": "2026-11-17T00:00:00.000Z",
         "dashboard": true,
         "lander": [
           0.65,

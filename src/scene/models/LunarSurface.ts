@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { HorizonManager } from '../../terrain/horizon';
 import { createLunarRegolithMaterial } from '../materials/RocketTextures';
+import { DeterministicPRNG } from '../materials/CelestialTextures';
 
 /**
  * 3D Photorealistic Lunar Terrain & Precision Sky-Dome Base Disc
@@ -209,37 +210,54 @@ export class LunarSurface {
     // ========================================================
     const discRadius = 16.0;
     const discGeo = new THREE.CylinderGeometry(discRadius, discRadius, 0.45, 64);
-    const discMat = new THREE.MeshStandardMaterial({
-      color: 0x141822,
-      roughness: 0.82,
-      metalness: 0.28
-    });
+    const discMat = createLunarRegolithMaterial(4, 4);
     this.domeBaseDisc = new THREE.Mesh(discGeo, discMat);
+    this.domeBaseDisc.name = 'DomeBaseDisc';
     this.domeBaseDisc.position.y = -0.22;
     this.domeBaseDisc.receiveShadow = true;
+    this.domeBaseDisc.castShadow = true;
     this.domeBaseDisc.visible = false;
     this.group.add(this.domeBaseDisc);
 
-    // Decorative geological features on base disc
+    // Realistic geological craters on base disc (matching CSA Moon Exploration showcase)
     this.craterGroup = new THREE.Group();
-    const craterRimMat = new THREE.MeshStandardMaterial({
-      color: 0x0f131a,
-      roughness: 0.9,
-      metalness: 0.1
+    this.craterGroup.name = 'CraterGroup';
+
+    const discPrng = new DeterministicPRNG(19690720);
+    const rimMat = createLunarRegolithMaterial(2, 2);
+    const bowlMat = new THREE.MeshStandardMaterial({
+      color: 0x181a20,
+      roughness: 0.98,
+      metalness: 0.02
     });
+
     for (let i = 0; i < 20; i++) {
-      const r = 3.2 + Math.random() * 11.5;
-      const th = Math.random() * Math.PI * 2;
+      const r = 3.4 + discPrng.next() * 11.2;
+      const th = discPrng.next() * Math.PI * 2;
       const cx = Math.cos(th) * r;
       const cz = Math.sin(th) * r;
-      const craterR = 0.45 + Math.random() * 1.5;
+      const craterR = 0.55 + discPrng.next() * 1.6;
 
-      const craterMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(craterR, craterR * 1.18, 0.09, 20),
-        craterRimMat
-      );
-      craterMesh.position.set(cx, 0.02, cz);
-      this.craterGroup.add(craterMesh);
+      const singleCrater = new THREE.Group();
+      singleCrater.position.set(cx, 0.22, cz);
+
+      // Raised ejecta rim ring (catches low-angle polar sunlight and casts shadow)
+      const rimGeo = new THREE.TorusGeometry(craterR, craterR * 0.16, 12, 24);
+      rimGeo.rotateX(Math.PI / 2);
+      const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+      rimMesh.position.y = craterR * 0.08;
+      rimMesh.castShadow = true;
+      rimMesh.receiveShadow = true;
+      singleCrater.add(rimMesh);
+
+      // Sunken dark interior bowl
+      const bowlGeo = new THREE.CylinderGeometry(craterR * 0.82, craterR * 0.3, craterR * 0.35, 20);
+      const bowlMesh = new THREE.Mesh(bowlGeo, bowlMat);
+      bowlMesh.position.y = -craterR * 0.12;
+      bowlMesh.receiveShadow = true;
+      singleCrater.add(bowlMesh);
+
+      this.craterGroup.add(singleCrater);
     }
     this.domeBaseDisc.add(this.craterGroup);
 

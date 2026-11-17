@@ -8,10 +8,19 @@ export function applyFieldTheme(conductor: ThreeConductor): void {
       if (
         ancestor === conductor.skyDome.group ||
         ancestor === conductor.particles.group ||
-        ancestor === conductor.rocket.boosterPlume
+        ancestor === conductor.rocket.boosterPlume ||
+        ancestor === conductor.atmosphere.approachMoon ||
+        ancestor === conductor.surface.landingTerrain ||
+        ancestor === conductor.surface.domeBaseDisc
       ) return;
     }
-    if (object === conductor.particles.group || object === conductor.rocket.boosterPlume) return;
+    if (
+      object === conductor.particles.group ||
+      object === conductor.rocket.boosterPlume ||
+      object === conductor.atmosphere.approachMoon ||
+      object === conductor.surface.landingTerrain ||
+      object === conductor.surface.domeBaseDisc
+    ) return;
     if (object instanceof THREE.PointLight) {
       if (object === conductor.rocket.boosterLight || object === conductor.atmosphere.ignitionLight) {
         return;
@@ -42,9 +51,8 @@ export function applyFieldTheme(conductor: ThreeConductor): void {
   });
   (conductor.rocket.upperPlume.material as THREE.Material).visible = false;
   (conductor.lander.engineFlame.material as THREE.Material).visible = false;
-  conductor.surface.craterGroup.visible = false;
+  conductor.surface.craterGroup.visible = true;
   (conductor.surface.horizonWallMesh.material as THREE.Material).visible = false;
-  conductor.surface.domeBaseDisc.material = new THREE.MeshBasicMaterial({ color: '#0C0D0B' });
   const stars = conductor.atmosphere.starfield.material as THREE.PointsMaterial;
   stars.vertexColors = false; stars.color.set('#ECE8DD'); stars.needsUpdate = true;
   const earth = conductor.atmosphere.distantEarth.children[0] as THREE.Mesh;

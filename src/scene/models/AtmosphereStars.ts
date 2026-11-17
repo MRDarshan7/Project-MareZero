@@ -30,6 +30,15 @@ export class AtmosphereStars {
     this.directionalSun = new THREE.DirectionalLight(0xfff5e6, 2.8);
     this.directionalSun.position.set(45, 50, 35);
     this.directionalSun.castShadow = true;
+    this.directionalSun.shadow.mapSize.width = 2048;
+    this.directionalSun.shadow.mapSize.height = 2048;
+    this.directionalSun.shadow.camera.near = 0.5;
+    this.directionalSun.shadow.camera.far = 250;
+    this.directionalSun.shadow.camera.left = -32;
+    this.directionalSun.shadow.camera.right = 32;
+    this.directionalSun.shadow.camera.top = 32;
+    this.directionalSun.shadow.camera.bottom = -32;
+    this.directionalSun.shadow.bias = -0.0005;
     this.group.add(this.directionalSun);
 
     // Rim light for dramatic aerospace edge highlighting
@@ -328,17 +337,27 @@ export class AtmosphereStars {
     this.distantEarth.visible = false;
     this.group.add(this.distantEarth);
 
-    // 6. Textured Approaching Lunar Sphere (Seen ahead in translunar flight)
+    // 6. High-Resolution Textured Approaching Lunar Globe (CSA Moon Exploration standard)
     this.approachMoon = new THREE.Group();
-    const moonSphereGeo = new THREE.SphereGeometry(22, 64, 64);
+    this.approachMoon.name = 'ApproachMoon';
+    const moonSphereGeo = new THREE.SphereGeometry(22, 96, 96);
     const moonTex = CelestialTextures.getMoonTexture();
+    const moonNormal = CelestialTextures.getMoonNormalMap();
+    const moonBump = CelestialTextures.getMoonBumpMap();
     const moonSphereMat = new THREE.MeshStandardMaterial({
       map: moonTex,
-      roughness: 0.92,
-      metalness: 0.08
+      normalMap: moonNormal,
+      normalScale: new THREE.Vector2(2.2, 2.2),
+      bumpMap: moonBump,
+      bumpScale: 0.16,
+      roughness: 0.94,
+      metalness: 0.04
     });
     const moonMesh = new THREE.Mesh(moonSphereGeo, moonSphereMat);
-    moonMesh.rotation.y = Math.PI * 0.6;
+    moonMesh.name = 'MoonGlobe';
+    moonMesh.rotation.y = Math.PI * 1.5;
+    moonMesh.castShadow = true;
+    moonMesh.receiveShadow = true;
     this.approachMoon.add(moonMesh);
 
     // Position ahead along negative Z
