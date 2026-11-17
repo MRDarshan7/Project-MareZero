@@ -470,13 +470,16 @@ export class ThreeConductor {
       this.atmosphere.directionalSun.position.set(35, 45, 25);
       this.atmosphere.rimLight.intensity = (1 - seg(p, 0.20, 0.45)) * 0.8;
     } else {
-      // Hard vacuum lunar phase: zero atmosphere, cool earthshine tint, intense solar beam
+      // Hard vacuum lunar phase: deep inky space shadow, harsh directional solar beam
       const moonTrans = seg(p, 0.55, 0.65);
       this.atmosphere.ambientLight.color.setHex(0x8f8b80);
-      this.atmosphere.ambientLight.intensity = THREE.MathUtils.lerp(0.18, 0.04, moonTrans);
-      this.atmosphere.directionalSun.color.setHex(0xece8dd);
-      this.atmosphere.directionalSun.intensity = THREE.MathUtils.lerp(3.5, 4.5, moonTrans);
-      if (p < 0.86) {
+      this.atmosphere.ambientLight.intensity = THREE.MathUtils.lerp(0.18, 0.012, moonTrans);
+      this.atmosphere.directionalSun.color.setHex(0xfffaed);
+      this.atmosphere.directionalSun.intensity = THREE.MathUtils.lerp(3.5, 4.8, moonTrans);
+      if (p < 0.75) {
+        // Oblique dramatic space sun angle for high-relief terminator shadows across Moon globe
+        this.atmosphere.directionalSun.position.set(48, 22, 10);
+      } else if (p < 0.86) {
         // Low grazing polar sunlight angle during descent
         this.atmosphere.directionalSun.position.set(28, 14, 32);
       }

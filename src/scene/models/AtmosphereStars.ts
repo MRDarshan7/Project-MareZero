@@ -337,24 +337,23 @@ export class AtmosphereStars {
     this.distantEarth.visible = false;
     this.group.add(this.distantEarth);
 
-    // 6. High-Resolution Textured Approaching Lunar Globe (CSA Moon Exploration standard)
+    // 6. High-Resolution Photorealistic NASA LRO Lunar Globe
     this.approachMoon = new THREE.Group();
     this.approachMoon.name = 'ApproachMoon';
     const moonSphereGeo = new THREE.SphereGeometry(22, 96, 96);
     const moonTex = CelestialTextures.getMoonTexture();
-    const moonNormal = CelestialTextures.getMoonNormalMap();
     const moonBump = CelestialTextures.getMoonBumpMap();
     const moonSphereMat = new THREE.MeshStandardMaterial({
       map: moonTex,
-      normalMap: moonNormal,
-      normalScale: new THREE.Vector2(2.2, 2.2),
       bumpMap: moonBump,
-      bumpScale: 0.16,
-      roughness: 0.94,
-      metalness: 0.04
+      bumpScale: 0.28,
+      roughness: 0.95,
+      metalness: 0.0,
+      flatShading: false
     });
     const moonMesh = new THREE.Mesh(moonSphereGeo, moonSphereMat);
     moonMesh.name = 'MoonGlobe';
+    // Orient near side with Oceanus Procellarum, Imbrium, and Tycho toward the camera
     moonMesh.rotation.y = Math.PI * 1.5;
     moonMesh.castShadow = true;
     moonMesh.receiveShadow = true;
