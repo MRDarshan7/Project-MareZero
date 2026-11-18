@@ -575,11 +575,11 @@ export class RocketTextures {
     }
     for (let i = 0; i < 256; i++) perm[256 + i] = perm[i];
 
-    // 8 isotropic 2D unit gradients offset by 37° (non-axis-aligned, non-diagonal)
-    const gradX = new Float32Array(8);
-    const gradY = new Float32Array(8);
-    for (let g = 0; g < 8; g++) {
-      const ang = (g / 8) * Math.PI * 2 + (37 * Math.PI / 180);
+    // 256 isotropic 2D unit gradients (continuous non-axis-aligned random directions)
+    const gradX = new Float32Array(256);
+    const gradY = new Float32Array(256);
+    for (let g = 0; g < 256; g++) {
+      const ang = prng.next() * Math.PI * 2;
       gradX[g] = Math.cos(ang);
       gradY[g] = Math.sin(ang);
     }
@@ -595,16 +595,16 @@ export class RocketTextures {
       const sx = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
       const sy = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
 
-      // Toroidal wrapping so textures tile seamlessly across (16, 16) repeat
+      // Toroidal wrapping so textures tile seamlessly
       const gx0 = ((x0 % freq) + freq) % freq;
       const gy0 = ((y0 % freq) + freq) % freq;
       const gx1 = (gx0 + 1) % freq;
       const gy1 = (gy0 + 1) % freq;
 
-      const g00 = perm[(perm[gx0 % 256] + gy0) % 256] % 8;
-      const g10 = perm[(perm[gx1 % 256] + gy0) % 256] % 8;
-      const g01 = perm[(perm[gx0 % 256] + gy1) % 256] % 8;
-      const g11 = perm[(perm[gx1 % 256] + gy1) % 256] % 8;
+      const g00 = perm[(perm[gx0 % 256] + gy0) % 256];
+      const g10 = perm[(perm[gx1 % 256] + gy0) % 256];
+      const g01 = perm[(perm[gx0 % 256] + gy1) % 256];
+      const g11 = perm[(perm[gx1 % 256] + gy1) % 256];
 
       const d00 = gradX[g00] * fx + gradY[g00] * fy;
       const d10 = gradX[g10] * (fx - 1) + gradY[g10] * fy;
@@ -711,7 +711,7 @@ export class RocketTextures {
     const normalCtx = normalCanvas.getContext('2d')!;
     const normalImg = normalCtx.createImageData(size, size);
     const nData = normalImg.data;
-    const normalStrength = 4.8;
+    const normalStrength = 2.4;
 
     for (let y = 0; y < size; y++) {
       const y0 = (y - 1 + size) % size;
@@ -741,6 +741,7 @@ export class RocketTextures {
     const normalTex = new THREE.CanvasTexture(normalCanvas);
     normalTex.wrapS = THREE.RepeatWrapping;
     normalTex.wrapT = THREE.RepeatWrapping;
+    normalTex.repeat.set(8, 8);
     normalTex.generateMipmaps = true;
     normalTex.minFilter = THREE.LinearMipmapLinearFilter;
     normalTex.magFilter = THREE.LinearFilter;
@@ -767,6 +768,7 @@ export class RocketTextures {
     const bumpTex = new THREE.CanvasTexture(bumpCanvas);
     bumpTex.wrapS = THREE.RepeatWrapping;
     bumpTex.wrapT = THREE.RepeatWrapping;
+    bumpTex.repeat.set(8, 8);
     bumpTex.generateMipmaps = true;
     bumpTex.minFilter = THREE.LinearMipmapLinearFilter;
     bumpTex.magFilter = THREE.LinearFilter;
@@ -858,19 +860,20 @@ export class RocketTextures {
     const albedoTex = new THREE.CanvasTexture(albedoCanvas);
     albedoTex.wrapS = THREE.RepeatWrapping;
     albedoTex.wrapT = THREE.RepeatWrapping;
+    albedoTex.repeat.set(8, 8);
     albedoTex.generateMipmaps = true;
     albedoTex.minFilter = THREE.LinearMipmapLinearFilter;
     albedoTex.magFilter = THREE.LinearFilter;
     this.regolithAlbedoTexture = albedoTex;
   }
 
-  public static getRegolithAlbedoTexture(repeatU: number = 16, repeatV: number = 16): THREE.Texture {
+  public static getRegolithAlbedoTexture(repeatU: number = 8, repeatV: number = 8): THREE.Texture {
     if (!this.regolithAlbedoTexture) {
       this.generateRegolithMaps();
     }
     if (typeof document === 'undefined') return new THREE.Texture();
-    if (repeatU === 16 && repeatV === 16) {
-      this.regolithAlbedoTexture!.repeat.set(16, 16);
+    if (repeatU === 8 && repeatV === 8) {
+      this.regolithAlbedoTexture!.repeat.set(8, 8);
       return this.regolithAlbedoTexture!;
     }
     const tex = this.regolithAlbedoTexture!.clone();
@@ -879,13 +882,13 @@ export class RocketTextures {
     return tex;
   }
 
-  public static getRegolithNormalMap(repeatU: number = 16, repeatV: number = 16): THREE.Texture {
+  public static getRegolithNormalMap(repeatU: number = 8, repeatV: number = 8): THREE.Texture {
     if (!this.regolithNormalMap) {
       this.generateRegolithMaps();
     }
     if (typeof document === 'undefined') return new THREE.Texture();
-    if (repeatU === 16 && repeatV === 16) {
-      this.regolithNormalMap!.repeat.set(16, 16);
+    if (repeatU === 8 && repeatV === 8) {
+      this.regolithNormalMap!.repeat.set(8, 8);
       return this.regolithNormalMap!;
     }
     const tex = this.regolithNormalMap!.clone();
@@ -894,13 +897,13 @@ export class RocketTextures {
     return tex;
   }
 
-  public static getRegolithBumpMap(repeatU: number = 16, repeatV: number = 16): THREE.Texture {
+  public static getRegolithBumpMap(repeatU: number = 8, repeatV: number = 8): THREE.Texture {
     if (!this.regolithBumpMap) {
       this.generateRegolithMaps();
     }
     if (typeof document === 'undefined') return new THREE.Texture();
-    if (repeatU === 16 && repeatV === 16) {
-      this.regolithBumpMap!.repeat.set(16, 16);
+    if (repeatU === 8 && repeatV === 8) {
+      this.regolithBumpMap!.repeat.set(8, 8);
       return this.regolithBumpMap!;
     }
     const tex = this.regolithBumpMap!.clone();
@@ -1125,22 +1128,19 @@ export function createSolarCellMaterial(): THREE.MeshStandardMaterial {
 }
 
 /**
- * Creates Hapke / Lommel-Seeliger regolith material with full PBR albedo, normal, and bump mapping.
- * Features high-frequency fine dust grain noise, mid-scale rocky variation, and authentic polar shadow relief.
- * Produces crisp, deep shadow relief under low-angle grazing polar sunlight.
+ * Creates Hapke / Lommel-Seeliger regolith material with full PBR albedo and tangent normal mapping.
+ * Features isotropic multi-scale gradient noise, fine dust grain grit, and authentic polar shadow relief.
+ * Tangent-space normal mapping eliminates screen-space derivative finite difference banding under low-angle grazing sunlight.
  */
-export function createLunarRegolithMaterial(repeatU: number = 16, repeatV: number = 16): THREE.MeshStandardMaterial {
+export function createLunarRegolithMaterial(repeatU: number = 8, repeatV: number = 8): THREE.MeshStandardMaterial {
   const albedo = RocketTextures.getRegolithAlbedoTexture(repeatU, repeatV);
   const normal = RocketTextures.getRegolithNormalMap(repeatU, repeatV);
-  const bump = RocketTextures.getRegolithBumpMap(repeatU, repeatV);
 
   return new THREE.MeshStandardMaterial({
     color: 0xffffff,
     map: albedo,
     normalMap: normal,
-    normalScale: new THREE.Vector2(2.5, 2.5),
-    bumpMap: bump,
-    bumpScale: 0.14,
+    normalScale: new THREE.Vector2(1.2, 1.2),
     roughness: 0.96,
     metalness: 0.0,
     flatShading: false

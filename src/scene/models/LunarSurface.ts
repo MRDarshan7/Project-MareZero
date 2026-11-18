@@ -72,6 +72,18 @@ function createCircularTerrainDisc(radius: number, rings: number, segments: numb
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+  // Explicit analytic tangents for smooth tangent-space normal mapping without screen-derivative aliasing
+  const numVerts = positions.length / 3;
+  const tangents = new Float32Array(numVerts * 4);
+  for (let i = 0; i < numVerts; i++) {
+    tangents[i * 4] = 1.0;
+    tangents[i * 4 + 1] = 0.0;
+    tangents[i * 4 + 2] = 0.0;
+    tangents[i * 4 + 3] = 1.0;
+  }
+  geo.setAttribute('tangent', new THREE.BufferAttribute(tangents, 4));
+
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return geo;
@@ -134,7 +146,7 @@ export function calculateTerrainSample(x: number, z: number): { y: number; cavit
       + 0.15 * Math.sin(3 * th + c.seed)
       + 0.08 * Math.cos(5 * th - c.seed * 0.7)
       + 0.05 * Math.sin(7 * th + c.seed * 1.3)
-      + 0.03 * Math.cos(x * 0.85 - z * 0.75);
+      + 0.03 * Math.cos(x * 0.94 - z * 0.34);
 
     const effR = c.r * distortion;
     const u = dist / effR;
@@ -261,7 +273,7 @@ export class LunarSurface {
     this.group.add(this.horizonWallMesh);
 
     // --- 1. Authentic Hapke / Lommel-Seeliger Regolith Material ---
-    const regolithMaterial = createLunarRegolithMaterial(16, 16);
+    const regolithMaterial = createLunarRegolithMaterial(8, 8);
     regolithMaterial.vertexColors = true;
     regolithMaterial.roughness = 0.96;
     regolithMaterial.metalness = 0.0;
@@ -514,15 +526,15 @@ export class LunarSurface {
    */
   public setMorphProgress(progress: number): void {
     const p = Math.max(0, Math.min(1, progress));
-    this.landingTerrain.visible = p < 0.3;
-    this.landingTerrain.scale.set(1 - p * 0.7, 1 - p * 0.7, 1 - p * 0.7);
+    this.landingTerrain.visible = p < 0.5;
+    this.landingTerrain.scale.set(1.0, 1.0, 1.0);
 
-    this.domeBaseDisc.visible = p > 0.05;
-    this.domeBaseDisc.scale.set(p, p, p);
+    this.domeBaseDisc.visible = p >= 0.2;
+    this.domeBaseDisc.scale.set(1.0, 1.0, 1.0);
 
     if (this.horizonWallMesh) {
       this.horizonWallMesh.visible = p > 0.05;
-      this.horizonWallMesh.scale.set(p, p, p);
+      this.horizonWallMesh.scale.set(1.0, 1.0, 1.0);
     }
   }
 }

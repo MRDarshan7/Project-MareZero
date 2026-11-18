@@ -746,7 +746,8 @@ export class ThreeConductor {
       if (this.lander.group.parent !== this.skyDome.group) {
         this.skyDome.group.add(this.lander.group);
       }
-      const landerY = THREE.MathUtils.lerp(0.85, 0.085, domeMorph);
+      const scaleMorph = ease(seg(p, 0.85, 0.88));
+      const landerY = THREE.MathUtils.lerp(0.85, 0.34, scaleMorph);
       this.lander.group.position.set(0, landerY, 0);
       this.lander.group.rotation.set(0, 0, 0);
       this.lander.group.scale.set(this._craftState.landerScale, this._craftState.landerScale, this._craftState.landerScale);
