@@ -152,6 +152,8 @@ export class LunarSurface {
 
     // --- 1. Authentic Hapke / Lommel-Seeliger Regolith Material ---
     const regolithMaterial = createLunarRegolithMaterial();
+    regolithMaterial.transparent = true;
+    regolithMaterial.opacity = 1.0;
 
     // ========================================================
     // 2. MULTI-OCTAVE PROCEDURAL TERRAIN (CIRCULAR DISC)
@@ -219,26 +221,61 @@ export class LunarSurface {
     // ========================================================
     const boulderCount = 90;
     const boulderGeo = new THREE.DodecahedronGeometry(0.35, 1);
-    // Micro-deform boulder vertices for faceted rock appearance
+    // Micro-deform boulder vertices for faceted, weathered rock appearance
     const bPos = boulderGeo.attributes.position;
     for (let b = 0; b < bPos.count; b++) {
       const vx = bPos.getX(b);
       const vy = bPos.getY(b);
       const vz = bPos.getZ(b);
-      const jitter = 0.85 + ((b * 13) % 7) * 0.05;
-      bPos.setXYZ(b, vx * jitter, vy * (0.8 + ((b * 17) % 5) * 0.08), vz * jitter);
+      const jitter = 0.90 + ((b * 13) % 7) * 0.03;
+      bPos.setXYZ(b, vx * jitter, vy * (0.75 + ((b * 17) % 5) * 0.05), vz * jitter);
     }
     boulderGeo.computeVertexNormals();
 
     const boulderMat = new THREE.MeshStandardMaterial({
-      color: 0x484b54,
-      roughness: 0.92,
-      metalness: 0.05
+      color: 0x5a5d66,
+      roughness: 0.95,
+      metalness: 0.02,
+      transparent: true,
+      opacity: 1.0
     });
 
     this.boulderMesh = new THREE.InstancedMesh(boulderGeo, boulderMat, boulderCount);
     this.boulderMesh.castShadow = true;
     this.boulderMesh.receiveShadow = true;
+
+    // Helper to evaluate exact surface height so boulders never float above ground
+    const getExactTerrainY = (x: number, z: number): number => {
+      let y = Math.sin(x * 0.08) * 0.55 + Math.cos(z * 0.09) * 0.45;
+      y += Math.sin(x * 0.22 + z * 0.18) * 0.28;
+      y += Math.sin(x * 0.55 - z * 0.42) * 0.12;
+
+      const dCenter = Math.hypot(x, z);
+      if (dCenter < 3.2) {
+        y *= Math.pow(dCenter / 3.2, 2.0);
+      } else {
+        const c1Dist = Math.hypot(x - 8, z - 6);
+        if (c1Dist < 6) {
+          const normDist = c1Dist / 6;
+          if (normDist < 0.75) {
+            y -= Math.cos((normDist / 0.75) * (Math.PI / 2)) * 1.5;
+          } else {
+            y += Math.sin(((normDist - 0.75) / 0.25) * Math.PI) * 0.35;
+          }
+        }
+        const c2Dist = Math.hypot(x + 9, z + 7);
+        if (c2Dist < 6.5) {
+          const normDist = c2Dist / 6.5;
+          if (normDist < 0.78) {
+            y -= Math.cos((normDist / 0.78) * (Math.PI / 2)) * 1.8;
+          } else {
+            y += Math.sin(((normDist - 0.78) / 0.22) * Math.PI) * 0.40;
+          }
+        }
+      }
+      const edgeFactor = Math.max(0, Math.min(1, (16.0 - dCenter) / 2.5));
+      return y * edgeFactor;
+    };
 
     const dummy = new THREE.Object3D();
     let seed = 42;
@@ -254,13 +291,15 @@ export class LunarSurface {
       const bx = Math.sin(th) * rad;
       const bz = Math.cos(th) * rad;
 
-      // Approximate surface elevation
-      const by = Math.sin(bx * 0.08) * 0.55 + Math.cos(bz * 0.09) * 0.45;
-      const scale = 0.35 + rnd() * 0.75;
+      // Exact surface elevation from crater terrain function
+      const by = getExactTerrainY(bx, bz);
+      // Realistic, smooth scale distribution (20-45 cm rocks)
+      const scale = 0.18 + rnd() * 0.27;
 
-      dummy.position.set(bx, by + scale * 0.15, bz);
+      // Lower boulder position so its base sits partially embedded in regolith rather than floating
+      dummy.position.set(bx, by - scale * 0.28, bz);
       dummy.rotation.set(rnd() * Math.PI, rnd() * Math.PI, rnd() * Math.PI);
-      dummy.scale.set(scale, scale * (0.7 + rnd() * 0.5), scale);
+      dummy.scale.set(scale, scale * (0.65 + rnd() * 0.25), scale);
       dummy.updateMatrix();
 
       this.boulderMesh.setMatrixAt(i, dummy.matrix);

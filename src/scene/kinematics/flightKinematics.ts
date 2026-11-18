@@ -449,14 +449,16 @@ export function computeCameraState(
   } else if (p < 0.84) {
     // -------------------------------------------------------------------------
     // Powered Descent Camera (p = 0.62 -> 0.84)
-    // Strictly horizontal orientation: pitch restricted to [-0.05, 0.22] rad.
-    // The surface rises up into view!
+    // Early Beat 6 (0.62 -> 0.74): camera looks slightly down along descent vector
+    // Late Beat 6 into Beat 7 (0.74 -> 0.84): subtle camera pitch-up looking across landing horizon
     // -------------------------------------------------------------------------
-    const camY = craft.landerWorldPos.y + 1.2;
+    const pitchUpT = ease(seg(p, 0.74, 0.84));
+    const lookY = craft.landerWorldPos.y + 0.85 + pitchUpT * 0.95;
+    const camY = craft.landerWorldPos.y + 1.25 - pitchUpT * 0.45;
     const camZ = craft.landerWorldPos.z + 14.5;
 
     camPos.set(0, camY, camZ);
-    lookTarget.set(0, craft.landerWorldPos.y + 1.2, craft.landerWorldPos.z);
+    lookTarget.set(0, lookY, craft.landerWorldPos.z);
   } else {
     // -------------------------------------------------------------------------
     // Sky-Dome Dashboard Interactive Orbit (p >= 0.84)

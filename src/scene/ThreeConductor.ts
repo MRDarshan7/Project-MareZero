@@ -619,11 +619,11 @@ export class ThreeConductor {
     }
 
     // ----------------------------------------------------
-    // BEAT 4, 5 & 6: APPROACH MOON & POWERED DESCENT (0.50 - 0.80)
+    // BEAT 4, 5 & 6: APPROACH MOON & POWERED DESCENT (0.50 - 0.82)
     // ----------------------------------------------------
     // Photorealistic NASA LRO Moon globe: grows in deep space during translunar cruise (0.50 - 0.62)
-    // and scales up to fill the lower half of the viewport during low-altitude powered descent (0.62 - 0.80)
-    this.atmosphere.approachMoon.visible = p >= 0.50 && p < 0.80;
+    // and scales up smoothly during low-altitude descent, crossfading into the detailed 3D landing site
+    this.atmosphere.approachMoon.visible = p >= 0.50 && p < 0.82;
     if (this.atmosphere.approachMoon.visible) {
       let moonScale = 0.20;
       let moonY = 0;
@@ -639,21 +639,32 @@ export class ThreeConductor {
         const horizonCrestY = this._craftState.landerWorldPos.y - crestOffsetY;
         moonY = horizonCrestY - moonR;
         moonZ = THREE.MathUtils.lerp(-240.0, -95.0, ease(approachT));
+        if (this.atmosphere.moonMat) this.atmosphere.moonMat.opacity = 1.0;
       } else {
-        // Beat 6: Low-altitude lunar powered descent (0.62 -> 0.80, altitude 15.0 km -> 150 m)
-        // Scale up Moon sphere and move closer so its curved horizon fills the lower half of the viewport
+        // Beat 6: Low-altitude lunar powered descent (0.62 -> 0.80, altitude 15.0 km -> 500 m)
+        // Scale up Moon sphere to fill the lower half of the viewport while preventing texture blur
         const descentT = seg(p, 0.62, 0.80);
-        moonScale = THREE.MathUtils.lerp(2.0, 8.2, ease(descentT));
+        moonScale = THREE.MathUtils.lerp(2.0, 6.2, ease(descentT));
         const moonR = 22.0 * moonScale;
 
-        // Crest of the lunar horizon stays framed directly below the descending lander and thrusters
-        const crestOffsetY = THREE.MathUtils.lerp(7.5, 4.2, descentT);
+        // Crest of the lunar horizon stays framed directly below the descending lander and matches local terrain
+        const crestOffsetY = THREE.MathUtils.lerp(7.5, 0.35, ease(descentT));
         const horizonCrestY = this._craftState.landerWorldPos.y - crestOffsetY;
         moonY = horizonCrestY - moonR;
 
-        // Front of lunar globe moves close behind lander flight path
-        const targetMoonZ = this._craftState.landerWorldPos.z - 10.0 - moonR * 0.12;
+        // Front of lunar globe stays at optimal focus distance to preserve high-res crater details
+        const targetMoonZ = this._craftState.landerWorldPos.z - 18.0 - moonR * 0.15;
         moonZ = THREE.MathUtils.lerp(-95.0, targetMoonZ, ease(descentT));
+
+        // Seamless crossfade across the final 30% of Beat 6 into Beat 7 (0.74 -> 0.82)
+        if (p >= 0.74) {
+          const crossfade = seg(p, 0.74, 0.82);
+          if (this.atmosphere.moonMat) {
+            this.atmosphere.moonMat.opacity = Math.max(0.0, 1.0 - ease(crossfade));
+          }
+        } else {
+          if (this.atmosphere.moonMat) this.atmosphere.moonMat.opacity = 1.0;
+        }
       }
 
       this.atmosphere.approachMoon.scale.set(moonScale, moonScale, moonScale);
@@ -696,17 +707,29 @@ export class ThreeConductor {
     }
 
     // ----------------------------------------------------
-    // BEAT 6: APPROACH & POWERED DESCENT (0.62 - 0.80)
+    // BEAT 6 & 7: SEAMLESS CROSSFADE TO DETAILED 3D LANDING SITE TERRAIN
     // ----------------------------------------------------
-    // Hide old procedural crater terrain mesh clipping into bottom corners during descent:
-    // Only the photorealistic Moon globe is visible until surface touchdown (p >= 0.80)
-    this.surface.group.visible = p >= 0.80;
+    // Smooth crossfade across final 30% of Beat 6 into Beat 7 (0.74 -> 0.82)
+    this.surface.group.visible = p >= 0.74;
     this.surface.landingTerrain.position.y = 0;
 
+    if (p >= 0.74 && p < 0.82) {
+      const terrainFade = ease(seg(p, 0.74, 0.81));
+      (this.surface.landingTerrain.material as THREE.Material).opacity = terrainFade;
+      if (this.surface.boulderMesh) {
+        (this.surface.boulderMesh.material as THREE.Material).opacity = terrainFade;
+      }
+    } else if (p >= 0.82) {
+      (this.surface.landingTerrain.material as THREE.Material).opacity = 1.0;
+      if (this.surface.boulderMesh) {
+        (this.surface.boulderMesh.material as THREE.Material).opacity = 1.0;
+      }
+    }
+
     // ----------------------------------------------------
-    // BEAT 7: TOUCHDOWN & DUST (0.80 - 0.86)
+    // BEAT 7: TOUCHDOWN & SOFT STREAMING REGOLITH DUST (0.80 - 0.86)
     // ----------------------------------------------------
-    this.particles.updateDust(p >= 0.80 && p < 0.85, 0, 0.1, 0);
+    this.particles.updateDust(p >= 0.80 && p < 0.86, 0, 0.05, 0, this.simTimeSec);
 
     // ----------------------------------------------------
     // BEAT 8: SKY-DOME DASHBOARD MORPH (0.86 - 1.00)

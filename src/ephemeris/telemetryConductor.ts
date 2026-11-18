@@ -100,10 +100,10 @@ export function getMissionTelemetry(p: number): MissionTelemetry {
     stageName = 'Descending';
     isDescent = true;
     const t = (prog - 0.62) / 0.18;
-    // Descent from 15,000 meters to 150 meters
-    altitudeKm = (15.0 * Math.pow(1 - t, 1.8));
+    // Monotonically descending from 15.0 km down to 0.50 km (500 meters)
+    altitudeKm = 0.50 + 14.50 * Math.pow(1 - t, 1.6);
     // Velocity strictly monotonically decreasing from 5,800 km/h to 120 km/h
-    velocityKmh = 5800.0 * Math.pow(1 - t, 1.4) + 120.0;
+    velocityKmh = 120.0 + 5680.0 * Math.pow(1 - t, 1.4);
     caption = 'The lander descends toward the surface';
   } else if (prog < 0.86) {
     // 80-86%: Touchdown
@@ -112,8 +112,8 @@ export function getMissionTelemetry(p: number): MissionTelemetry {
     stageName = 'Approaching the surface';
     isDescent = true;
     const t = (prog - 0.80) / 0.06;
-    // Altitude descends from 150 meters to 0
-    altitudeKm = Math.max(0, 0.15 * (1 - t));
+    // Altitude continuously descends from 500 meters (0.50 km) down to 0 meters with zero upward jump
+    altitudeKm = Math.max(0, 0.50 * Math.pow(1 - t, 1.2));
     // Speed decelerates from 120 km/h to 0 km/h
     velocityKmh = Math.max(0, 120.0 * (1 - t));
     if (t >= 0.8) {

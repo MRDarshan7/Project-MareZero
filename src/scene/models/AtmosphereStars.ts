@@ -116,6 +116,8 @@ export class AtmosphereStars {
   public earthAtmoHalo!: THREE.Mesh;
   public earthAtmoMat!: THREE.ShaderMaterial;
   public approachMoon: THREE.Group;
+  public moonMesh!: THREE.Mesh;
+  public moonMat!: THREE.MeshStandardMaterial;
   public starfield: THREE.Points;
   public directionalSun: THREE.DirectionalLight;
   public ambientLight: THREE.AmbientLight;
@@ -985,20 +987,22 @@ export class AtmosphereStars {
     const moonSphereGeo = new THREE.SphereGeometry(22, 96, 96);
     const moonTex = CelestialTextures.getMoonTexture();
     const moonBump = CelestialTextures.getMoonBumpMap();
-    const moonSphereMat = new THREE.MeshStandardMaterial({
+    this.moonMat = new THREE.MeshStandardMaterial({
       map: moonTex,
       bumpMap: moonBump,
       bumpScale: 0.28,
       roughness: 0.95,
       metalness: 0.0,
-      flatShading: false
+      flatShading: false,
+      transparent: true,
+      opacity: 1.0
     });
-    const moonMesh = new THREE.Mesh(moonSphereGeo, moonSphereMat);
-    moonMesh.name = 'MoonGlobe';
-    moonMesh.rotation.y = Math.PI * 1.5;
-    moonMesh.castShadow = true;
-    moonMesh.receiveShadow = false;
-    this.approachMoon.add(moonMesh);
+    this.moonMesh = new THREE.Mesh(moonSphereGeo, this.moonMat);
+    this.moonMesh.name = 'MoonGlobe';
+    this.moonMesh.rotation.y = Math.PI * 1.5;
+    this.moonMesh.castShadow = true;
+    this.moonMesh.receiveShadow = false;
+    this.approachMoon.add(this.moonMesh);
 
     this.approachMoon.position.set(0, 15, -120);
     this.approachMoon.visible = false;

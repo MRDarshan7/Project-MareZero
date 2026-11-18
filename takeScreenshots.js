@@ -73,10 +73,20 @@ async function run() {
   await scrollToProgress(0.60);
   await page.screenshot({ path: path.join(outDir, '03b-lander-unfolding.png') });
 
-  // 4. Stage 4: Lunar powered descent
+  // 4. Stage 4: Lunar powered descent (Beat 6)
   console.log('Capturing stage 4: Lunar powered descent...');
   await scrollToProgress(0.72);
   await page.screenshot({ path: path.join(outDir, '04-lunar-descent.png') });
+
+  // 4b. Stage 4b: Beat 6 late into Beat 7 crossfade (0.78)
+  console.log('Capturing stage 4b: Lunar approach crossfade (Beat 6 into 7)...');
+  await scrollToProgress(0.78);
+  await page.screenshot({ path: path.join(outDir, '04b-lunar-approach-crossfade.png') });
+
+  // 4c. Stage 4c: Beat 7 - Touchdown approach & soft regolith dust plumes (0.83)
+  console.log('Capturing stage 4c: Touchdown dust plumes (Beat 7)...');
+  await scrollToProgress(0.83);
+  await page.screenshot({ path: path.join(outDir, '04c-lunar-touchdown-dust.png') });
 
   // 5. Stage 5: Touchdown
   console.log('Capturing stage 5: Touchdown...');

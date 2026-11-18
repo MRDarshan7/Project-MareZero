@@ -99,6 +99,7 @@ export class ParticleSystems {
   // Reusable procedural textures
   private fireTexture: THREE.Texture | null = null;
   private smokeTexture: THREE.Texture | null = null;
+  private dustTexture: THREE.Texture | null = null;
 
   constructor() {
     this.group = new THREE.Group();
@@ -119,6 +120,15 @@ export class ParticleSystems {
       [0.55, 'rgba(215, 222, 232, 0.38)'],
       [0.85, 'rgba(190, 200, 215, 0.08)'],
       [1.0, 'rgba(180, 195, 210, 0.0)']
+    ]);
+
+    // Soft Radial Alpha-Gradient Lunar Regolith Dust Sprite
+    this.dustTexture = createRadialTexture(64, [
+      [0.0, 'rgba(215, 212, 205, 0.95)'],
+      [0.25, 'rgba(195, 192, 185, 0.65)'],
+      [0.55, 'rgba(184, 180, 172, 0.32)'],
+      [0.80, 'rgba(165, 160, 150, 0.10)'],
+      [1.0, 'rgba(140, 135, 125, 0.0)']
     ]);
 
     // ----------------------------------------------------
@@ -232,16 +242,18 @@ export class ParticleSystems {
     this.group.add(this.plumePoints);
 
     // ----------------------------------------------------
-    // 6. Lunar Touchdown Dust Particles
+    // 6. Lunar Touchdown Dust Particles (Soft Radial Regolith Plumes)
     // ----------------------------------------------------
     const dustGeo = new THREE.BufferGeometry();
     this.dustPositions = new Float32Array(this.dustCount * 3);
     dustGeo.setAttribute('position', new THREE.BufferAttribute(this.dustPositions, 3));
     this.dustMat = new THREE.PointsMaterial({
-      color: 0x9fa4ae,
-      size: 0.65,
+      map: this.dustTexture,
+      color: 0xb8b4ac, // warm lunar-grey tint
+      size: 2.2, // soft billboarding sprite particle size
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.28, // low opacity 0.18–0.35
+      blending: THREE.NormalBlending,
       depthWrite: false
     });
     this.dustPoints = new THREE.Points(dustGeo, this.dustMat);
@@ -508,22 +520,26 @@ export class ParticleSystems {
   }
 
   /**
-   * Deterministic lunar touchdown dust simulation
+   * Deterministic lunar touchdown regolith dust simulation:
+   * Soft radial plumes streaming outward horizontally along the ground from the engine impingement point.
    */
-  public updateDust(active: boolean, originX: number, originY: number, originZ: number): void {
+  public updateDust(active: boolean, originX: number, originY: number, originZ: number, timeSec: number = 0): void {
     this.dustPoints.visible = active;
     if (!active) return;
 
     for (let i = 0; i < this.dustCount; i++) {
       const idx = i * 3;
-      const angle = i * 2.3999632;
-      const frac = ((i * 19) % 100) / 100;
-      const dist = 0.8 + frac * 6.5;
-      const h = Math.sin(frac * Math.PI) * 0.9;
+      // Uniform radial angle dispersion using golden ratio spiral + micro perturbation (zero concentric rings)
+      const angle = (i * 0.61803398875) * Math.PI * 2 + Math.sin(i * 3.7) * 0.15;
+      const u = ((i / this.dustCount) + timeSec * 0.65) % 1.0;
+      // Stream outward horizontally along the ground from the engine plume impingement point
+      const dist = 0.35 + Math.pow(u, 0.70) * 8.5;
+      const h = Math.pow(u, 0.5) * (1 - u) * 0.35;
+      const jitter = Math.sin(i * 11.3) * (0.12 * u);
 
-      this.dustPositions[idx] = originX + Math.cos(angle) * dist;
+      this.dustPositions[idx] = originX + Math.cos(angle) * dist + jitter;
       this.dustPositions[idx + 1] = originY + h;
-      this.dustPositions[idx + 2] = originZ + Math.sin(angle) * dist;
+      this.dustPositions[idx + 2] = originZ + Math.sin(angle) * dist + jitter;
     }
     this.dustPoints.geometry.attributes.position.needsUpdate = true;
   }
@@ -534,6 +550,7 @@ export class ParticleSystems {
   public destroy(): void {
     if (this.fireTexture) this.fireTexture.dispose();
     if (this.smokeTexture) this.smokeTexture.dispose();
+    if (this.dustTexture) this.dustTexture.dispose();
 
     this.firePoints.geometry.dispose();
     this.fireMat.dispose();
