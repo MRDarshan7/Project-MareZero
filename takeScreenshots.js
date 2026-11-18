@@ -78,6 +78,7 @@ async function run() {
   // 6. Stage 6: Sky-Dome Dashboard
   console.log('Capturing stage 6: Sky-Dome Dashboard...');
   await scrollToProgress(1.0);
+  await new Promise(r => setTimeout(r, 850));
   await page.screenshot({ path: path.join(outDir, '06-skydome-dashboard.png') });
 
   // 7. Timeline Tab

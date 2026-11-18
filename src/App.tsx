@@ -20,12 +20,17 @@ function rememberDashboard(value: boolean) {
   try { if (value) sessionStorage.setItem(SESSION_KEY, 'dashboard'); else sessionStorage.removeItem(SESSION_KEY); } catch { /* Storage is optional. */ }
 }
 
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 export default function App() {
   const store = useNavigatorStore();
   const latest = useRef(store); latest.current = store;
   const [skipInitially] = useState(initialSkip);
   const [storyEnabled, setStoryEnabled] = useState(!skipInitially);
   const [dashboardVisible, setDashboardVisible] = useState(skipInitially);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [conductor, setConductor] = useState<ThreeConductor | null>(null);
   const [error, setError] = useState('');
   const conductorRef = useRef<ThreeConductor | null>(null);
@@ -43,6 +48,8 @@ export default function App() {
   const enabled = useRef(storyEnabled); enabled.current = storyEnabled;
   const target = useRef(skipInitially ? 1 : 0);
   const holdHandoff = useRef(false);
+  const isMorphing = useRef(false);
+  const animFrameId = useRef<number | null>(null);
   const debug = new URLSearchParams(window.location.search).get('debug') === '1';
 
   const renderNow = useCallback((p: number) => {
@@ -53,11 +60,18 @@ export default function App() {
   }, []);
   const registerDomeHost = useCallback((host: HTMLDivElement | null) => {
     domeHost.current = host;
+    if (isMorphing.current) return;
     const current = conductorRef.current;
     const canvas = canvasRef.current;
     if (phase.current && host && canvas) {
       if (canvas.parentElement !== host) {
         host.appendChild(canvas);
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.zIndex = '';
         canvas.style.pointerEvents = 'auto';
         canvas.tabIndex = 0;
         canvas.setAttribute('aria-label', 'Interactive 3D sky dome; drag to orbit and scroll to zoom.');
@@ -73,10 +87,17 @@ export default function App() {
   const subscribeFrame = useCallback((listener: () => void) => { subscribers.current.add(listener); return () => { subscribers.current.delete(listener); }; }, []);
   const scene: SceneBridge = useMemo(() => ({ conductor, error, registerDomeHost, subscribeFrame }), [conductor, error, registerDomeHost, subscribeFrame]);
   const attachCanvas = useCallback(() => {
+    if (isMorphing.current) return;
     const current = conductorRef.current, canvas = canvasRef.current;
     const host = phase.current ? domeHost.current : storyHost.current;
     if (!current || !canvas || !host) return;
     if (canvas.parentElement !== host) host.appendChild(canvas);
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.zIndex = '';
     canvas.style.pointerEvents = phase.current ? 'auto' : 'none';
     canvas.tabIndex = phase.current ? 0 : -1;
     canvas.setAttribute('aria-label', phase.current ? 'Interactive 3D sky dome; drag to orbit and scroll to zoom.' : 'Scroll-driven rocket launch story.');
@@ -115,13 +136,18 @@ export default function App() {
       if (debugValue.current) debugValue.current.value = p.toFixed(3);
       document.documentElement.dataset.storyProgress = p.toFixed(5);
       subscribers.current.forEach(listener => listener());
-      if (enabled.current && !phase.current && p === 1 && target.current === 1 && !holdHandoff.current) {
-        phase.current = true; rememberDashboard(true); setDashboardVisible(true);
+      if (enabled.current && !phase.current && p === 1 && target.current === 1 && !holdHandoff.current && !isMorphing.current) {
+        startTransitionToDashboard();
       }
     };
     renderNow(target.current); setConductor(current);
     if (skipInitially) rememberDashboard(true);
-    return () => { current.destroy(); canvas.remove(); conductorRef.current = null; };
+    return () => {
+      if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
+      current.destroy();
+      canvas.remove();
+      conductorRef.current = null;
+    };
   }, []);
 
   useLayoutEffect(attachCanvas, [dashboardVisible, storyEnabled, conductor, store.activeTab, attachCanvas]);
@@ -150,6 +176,7 @@ export default function App() {
 
   useEffect(() => {
     const scroll = () => {
+      if (isMorphing.current) return;
       if (!enabled.current || !track.current) return;
       const range = track.current.offsetHeight - window.innerHeight;
       const p = Math.max(0, Math.min(1, range > 0 ? window.scrollY / range : 0));
@@ -175,18 +202,26 @@ export default function App() {
     };
   }, [renderNow]);
 
-  const skip = () => {
+  const skipImmediate = useCallback(() => {
+    if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
+    isMorphing.current = false;
+    setIsTransitioning(false);
     rememberDashboard(true);
     store.setIsPlaying(false);
     enabled.current = false;
     phase.current = true;
     target.current = 1;
 
-    // Immediately preserve canvas in domeHost if available before storyHost unmounts
     const canvas = canvasRef.current;
     const dome = domeHost.current;
     if (canvas && dome && canvas.parentElement !== dome) {
       dome.appendChild(canvas);
+      canvas.style.position = 'absolute';
+      canvas.style.top = '0';
+      canvas.style.left = '0';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.zIndex = '';
       canvas.style.pointerEvents = 'auto';
       canvas.tabIndex = 0;
       canvas.setAttribute('aria-label', 'Interactive 3D sky dome; drag to orbit and scroll to zoom.');
@@ -205,9 +240,127 @@ export default function App() {
     }
 
     window.scrollTo(0, 0);
-  };
+  }, [renderNow, store]);
 
-  const replay = () => {
+  const startTransitionToDashboard = useCallback(() => {
+    if (isMorphing.current || phase.current) return;
+
+    const current = conductorRef.current;
+    const canvas = canvasRef.current;
+    const dome = domeHost.current;
+    if (!current || !canvas || !dome) {
+      skipImmediate();
+      return;
+    }
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      skipImmediate();
+      return;
+    }
+
+    isMorphing.current = true;
+    setIsTransitioning(true);
+    rememberDashboard(true);
+    store.setIsPlaying(false);
+    enabled.current = false;
+    phase.current = true;
+    target.current = 1;
+
+    // 1. Advance scene directly to Beat 8 Sky-Dome view
+    current.setProgressImmediate(1);
+
+    // 2. Make dashboard visible so DOM measures destination card
+    setDashboardVisible(true);
+
+    // 3. Float canvas above all elements in fixed viewport coordinates
+    const startTop = 0;
+    const startLeft = 0;
+    const startWidth = window.innerWidth;
+    const startHeight = window.innerHeight;
+
+    if (canvas.parentElement !== document.body) {
+      document.body.appendChild(canvas);
+    }
+    canvas.style.position = 'fixed';
+    canvas.style.zIndex = '90';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.top = `${startTop}px`;
+    canvas.style.left = `${startLeft}px`;
+    canvas.style.width = `${startWidth}px`;
+    canvas.style.height = `${startHeight}px`;
+
+    // 4. Scroll window to top so dashboard header aligns with top
+    window.scrollTo(0, 0);
+
+    const duration = 700;
+    const startTime = performance.now();
+
+    const frame = (now: number) => {
+      const elapsed = now - startTime;
+      const p = Math.min(1, elapsed / duration);
+      const eased = easeInOutCubic(p);
+
+      // Measure target dome bounding box on each frame to accommodate responsive reflow
+      const targetRect = dome.getBoundingClientRect();
+      const endTop = targetRect && targetRect.width > 0 ? targetRect.top : 240;
+      const endLeft = targetRect && targetRect.width > 0 ? targetRect.left : (window.innerWidth - 600) / 2;
+      const endWidth = targetRect && targetRect.width > 0 ? targetRect.width : 600;
+      const endHeight = targetRect && targetRect.height > 0 ? targetRect.height : 360;
+
+      const curTop = startTop + (endTop - startTop) * eased;
+      const curLeft = startLeft + (endLeft - startLeft) * eased;
+      const curWidth = Math.max(1, Math.round(startWidth + (endWidth - startWidth) * eased));
+      const curHeight = Math.max(1, Math.round(startHeight + (endHeight - startHeight) * eased));
+
+      canvas.style.top = `${curTop}px`;
+      canvas.style.left = `${curLeft}px`;
+      canvas.style.width = `${curWidth}px`;
+      canvas.style.height = `${curHeight}px`;
+
+      current.setExplicitSize(curWidth, curHeight);
+      current.skyDome.prepareView(current.camera, curHeight);
+      current.renderCinematicSequence(1.0, now);
+      current.renderer.render(current.scene, current.camera);
+
+      if (p < 1) {
+        animFrameId.current = requestAnimationFrame(frame);
+      } else {
+        // FLIP complete: dock cleanly into domeHost container
+        isMorphing.current = false;
+        setIsTransitioning(false);
+        setStoryEnabled(false);
+
+        if (dome && canvas.parentElement !== dome) {
+          dome.appendChild(canvas);
+        }
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.zIndex = '';
+        canvas.style.pointerEvents = 'auto';
+        canvas.tabIndex = 0;
+        canvas.setAttribute('aria-label', 'Interactive 3D sky dome; drag to orbit and scroll to zoom.');
+
+        current.updateContainerObserver(dome);
+        current.onResize();
+        current.ensureAnimationLoop();
+        renderNow(1);
+      }
+    };
+
+    animFrameId.current = requestAnimationFrame(frame);
+  }, [renderNow, store, skipImmediate]);
+
+  const skip = useCallback(() => {
+    startTransitionToDashboard();
+  }, [startTransitionToDashboard]);
+
+  const replay = useCallback(() => {
+    if (animFrameId.current) cancelAnimationFrame(animFrameId.current);
+    isMorphing.current = false;
+    setIsTransitioning(false);
     rememberDashboard(false);
     store.setIsPlaying(false);
     enabled.current = true;
@@ -218,6 +371,12 @@ export default function App() {
     const story = storyHost.current;
     if (canvas && story && canvas.parentElement !== story) {
       story.appendChild(canvas);
+      canvas.style.position = 'absolute';
+      canvas.style.top = '0';
+      canvas.style.left = '0';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.zIndex = '';
       canvas.style.pointerEvents = 'none';
       canvas.tabIndex = -1;
       canvas.setAttribute('aria-label', 'Scroll-driven rocket launch story.');
@@ -235,7 +394,7 @@ export default function App() {
       current.ensureAnimationLoop();
       renderNow(0);
     }
-  };
+  }, [renderNow, store]);
 
   useEffect(() => {
     if (!debug) return;
@@ -277,7 +436,7 @@ export default function App() {
     };
   }, [debug, renderNow]);
 
-  return <div className={`lunar-experience ${dashboardVisible ? 'at-dashboard' : 'in-story'}`} data-story-enabled={storyEnabled}>
+  return <div className={`lunar-experience ${dashboardVisible ? 'at-dashboard' : 'in-story'} ${isTransitioning ? 'is-morphing-to-dashboard' : ''}`} data-story-enabled={storyEnabled}>
     {storyEnabled && <div ref={track} className="intro-track"><div className="intro-pin">
       <div ref={storyHost} className="intro-scene-host" />
       <HeroOverlay ref={hero} onSkipToDashboard={skip} />

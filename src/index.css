@@ -219,6 +219,74 @@ footer p { font-size:11px; color:var(--muted); max-width:100ch; }
 .in-story .dashboard-entry .dome-labels { visibility:hidden!important; }
 .at-dashboard .intro-pin { visibility:hidden; }
 .at-dashboard .intro-pin .dome-labels { visibility:hidden!important; }
+
+/* =========================================================================
+   Continuous Camera & Dome Morph (FLIP Transition) & Staggered HUD Crossfade
+   ========================================================================= */
+
+.is-morphing-to-dashboard .intro-pin {
+  position: fixed !important;
+  inset: 0 !important;
+  height: 100vh !important;
+  pointer-events: none !important;
+  z-index: 95 !important;
+}
+
+.is-morphing-to-dashboard .story-hero,
+.is-morphing-to-dashboard .story-telemetry,
+.is-morphing-to-dashboard .mission-caption-pill,
+.is-morphing-to-dashboard .story-dome-labels,
+.is-morphing-to-dashboard .story-skip,
+.is-morphing-to-dashboard .story-debug {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 300ms ease-out !important;
+}
+
+.is-morphing-to-dashboard .intro-track {
+  display: none !important;
+}
+
+.is-morphing-to-dashboard .dashboard-entry {
+  visibility: visible !important;
+  pointer-events: auto !important;
+  margin-top: 0 !important;
+}
+
+.is-morphing-to-dashboard .dashboard-entry .dome-labels {
+  visibility: hidden !important;
+}
+
+.is-morphing-to-dashboard .masthead,
+.is-morphing-to-dashboard .location-heading,
+.is-morphing-to-dashboard .verdicts,
+.is-morphing-to-dashboard .control-row,
+.is-morphing-to-dashboard .panorama-column,
+.is-morphing-to-dashboard .timeline-section,
+.is-morphing-to-dashboard .site-note,
+.is-morphing-to-dashboard footer {
+  animation: dashboardFadeSlideIn 400ms ease-out both;
+}
+
+.is-morphing-to-dashboard .masthead { animation-delay: 150ms; }
+.is-morphing-to-dashboard .location-heading { animation-delay: 180ms; }
+.is-morphing-to-dashboard .verdicts { animation-delay: 220ms; }
+.is-morphing-to-dashboard .control-row { animation-delay: 260ms; }
+.is-morphing-to-dashboard .panorama-column { animation-delay: 300ms; }
+.is-morphing-to-dashboard .timeline-section { animation-delay: 340ms; }
+.is-morphing-to-dashboard .site-note,
+.is-morphing-to-dashboard footer { animation-delay: 380ms; }
+
+@keyframes dashboardFadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .story-hero { position:absolute; left:5%; top:18%; width:min(450px,34%); z-index:3; }
 .story-hero h1 { font:500 58px/1.02 Newsreader,Georgia,serif; }
 .story-hero p { font-size:18px; line-height:1.5; margin:22px 0; max-width:36ch; }

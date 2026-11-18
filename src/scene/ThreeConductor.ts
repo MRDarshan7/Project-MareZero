@@ -341,6 +341,19 @@ export class ThreeConductor {
   };
 
   /**
+   * Explicitly set dimensions during animated FLIP container transitions
+   */
+  public setExplicitSize(w: number, h: number): void {
+    if (this.isDestroyed || !this.canvas || (this.width === w && this.height === h)) return;
+    this.width = w;
+    this.height = h;
+    this.camera.aspect = this.width / (this.height || 1);
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(this.width, this.height, false);
+    this.shadowNeedsUpdate = true;
+  };
+
+  /**
    * Set target scroll progress (0.0 to 1.0)
    */
   public setScrollProgress(progress: number): void {
