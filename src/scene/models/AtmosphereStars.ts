@@ -132,6 +132,7 @@ export class AtmosphereStars {
   public floodlights: FloodlightAssembly[] = [];
   public beaconMaterials: THREE.MeshBasicMaterial[] = [];
   public horizonGlow: THREE.Mesh;
+  public translunarTrajectory: THREE.Line;
 
   constructor() {
     this.group = new THREE.Group();
@@ -881,6 +882,32 @@ export class AtmosphereStars {
     this.approachMoon.position.set(0, 15, -120);
     this.approachMoon.visible = false;
     this.group.add(this.approachMoon);
+
+    // 7. Subtle Dashed Orbital Trajectory Arc (Translunar injection corridor)
+    const trajCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-28, 48, -200),
+      new THREE.Vector3(-14, 56, -110),
+      new THREE.Vector3(-4, 62, -35),
+      new THREE.Vector3(0, 58, 2),
+      new THREE.Vector3(2, 48, 12),
+      new THREE.Vector3(0, 36, -30),
+      new THREE.Vector3(-2, 22, -90),
+      new THREE.Vector3(0, 12, -160)
+    ]);
+    const trajPoints = trajCurve.getPoints(120);
+    const trajGeo = new THREE.BufferGeometry().setFromPoints(trajPoints);
+    const trajMat = new THREE.LineDashedMaterial({
+      color: 0x38bdf8,
+      dashSize: 2.2,
+      gapSize: 1.4,
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false
+    });
+    this.translunarTrajectory = new THREE.Line(trajGeo, trajMat);
+    this.translunarTrajectory.computeLineDistances();
+    this.translunarTrajectory.visible = false;
+    this.group.add(this.translunarTrajectory);
   }
 
   /**

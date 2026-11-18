@@ -78,14 +78,21 @@ export function getMissionTelemetry(p: number): MissionTelemetry {
     velocityKmh = 22000 + (1 - t * 0.4) * 6000; // TLI burn velocity
     caption = 'The fairing opens to reveal the lander';
   } else if (prog < 0.62) {
-    // 55-62%: Lander release
-    beatIndex = 5;
-    beatName = 'Lander release';
-    stageName = 'Coasting toward the Moon';
+    // 55-62%: Lander release & Trans-Lunar Cruise
     const t = (prog - 0.55) / 0.07;
     altitudeKm = 384400.0 - t * 350000.0; // Distance to Moon closing
     velocityKmh = 25600 - t * 18000;
-    caption = 'The lander separates and unfolds';
+    if (prog < 0.585) {
+      beatIndex = 5;
+      beatName = 'Lander release';
+      stageName = 'Coasting toward the Moon';
+      caption = 'The lander separates and unfolds';
+    } else {
+      beatIndex = 5;
+      beatName = 'Trans-lunar cruise';
+      stageName = 'Trans-lunar cruise';
+      caption = 'Trans-lunar cruise: coasting toward the Moon';
+    }
   } else if (prog < 0.80) {
     // 62-80%: Approach & Powered Descent
     beatIndex = 6;

@@ -290,11 +290,22 @@ export function computeCraftState(
     upperStageWorldRot.set(tUpper * 0.65, 0, tUpper * 0.35);
   }
 
+  // Gentle spacecraft axial roll during translunar coast (barbecue thermal roll)
+  // Rolls up to ~38 degrees about primary Y axis, catching dynamic solar glints
+  let landerRotX = 0;
+  let landerRotY = 0;
+  let landerRotZ = 0;
+  if (p >= 0.53 && p < 0.62) {
+    const rollT = seg(p, 0.53, 0.62);
+    landerRotY = Math.sin(rollT * Math.PI) * 0.65; // ~37 degrees axial roll
+    landerRotX = Math.sin(rollT * Math.PI) * 0.08; // subtle pitch tilt
+  }
+
   if (target) {
     target.craftRigPos.set(craftRigX, craftRigY, craftRigZ);
     target.craftRigRot.set(0, 0, 0);
     target.landerWorldPos.set(landerWorldX, landerWorldY, landerWorldZ);
-    target.landerWorldRot.set(0, 0, 0);
+    target.landerWorldRot.set(landerRotX, landerRotY, landerRotZ);
     target.landerScale = landerScale;
     target.boosterAttached = boosterAttached;
     target.boosterWorldPos.copy(boosterWorldPos);
@@ -318,7 +329,7 @@ export function computeCraftState(
     craftRigPos: new THREE.Vector3(craftRigX, craftRigY, craftRigZ),
     craftRigRot: new THREE.Euler(0, 0, 0),
     landerWorldPos: new THREE.Vector3(landerWorldX, landerWorldY, landerWorldZ),
-    landerWorldRot: new THREE.Euler(0, 0, 0),
+    landerWorldRot: new THREE.Euler(landerRotX, landerRotY, landerRotZ),
     landerScale,
     boosterAttached,
     boosterWorldPos,
@@ -418,7 +429,22 @@ export function computeCameraState(
     const lookY = THREE.MathUtils.lerp(craft.craftRigPos.y + 10.0, craft.landerWorldPos.y, stageTransition);
     const camY = THREE.MathUtils.lerp(craft.craftRigPos.y + 11.5, craft.landerWorldPos.y * 0.85 + 3.0, stageTransition);
 
-    camPos.set(0, camY, dollyZ);
+    // Slow cinematic camera orbit & pitch elevation during translunar coast (p = 0.52 -> 0.62)
+    // Lerps azimuth by ~35 degrees around spacecraft alongside gentle vertical pitch
+    let sweepOffsetX = 0;
+    let sweepOffsetY = 0;
+    let sweepOffsetZ = 0;
+
+    if (p >= 0.52 && p < 0.62) {
+      const sweepT = ease(seg(p, 0.52, 0.62));
+      const sweepAngle = Math.sin(sweepT * Math.PI) * (35 * Math.PI / 180); // 35 degrees
+      const orbitR = THREE.MathUtils.lerp(24.0, 32.0, Math.sin(sweepT * Math.PI));
+      sweepOffsetX = Math.sin(sweepAngle) * orbitR * 0.55;
+      sweepOffsetY = Math.sin(sweepT * Math.PI) * 2.2;
+      sweepOffsetZ = (Math.cos(sweepAngle) - 1.0) * 5.0;
+    }
+
+    camPos.set(sweepOffsetX, camY + sweepOffsetY, dollyZ + sweepOffsetZ);
     lookTarget.set(0, lookY, craft.landerWorldPos.z);
   } else if (p < 0.84) {
     // -------------------------------------------------------------------------

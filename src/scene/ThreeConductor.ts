@@ -578,23 +578,49 @@ export class ThreeConductor {
     const upperThrust = seg(p, 0.35, 0.39) * (1 - seg(p, 0.53, 0.55));
     this.rocket.setUpperThrust(upperThrust);
 
-    // Distant Earth below (28% to 65%)
-    this.atmosphere.distantEarth.visible = p > 0.28 && p < 0.65;
-    const earthScale = Math.max(0.2, 1.0 - seg(p, 0.28, 0.65) * 0.75);
-    this.atmosphere.distantEarth.scale.set(earthScale, earthScale, earthScale);
+    // Receding photorealistic Earth in the distant background behind the lander (28% to 68%)
+    if (p > 0.28 && p < 0.68) {
+      this.atmosphere.distantEarth.visible = true;
+      const earthProgress = seg(p, 0.40, 0.68);
+      const earthScale = THREE.MathUtils.lerp(0.95, 0.24, ease(earthProgress));
+      const earthX = THREE.MathUtils.lerp(-18, -34, earthProgress);
+      const earthY = THREE.MathUtils.lerp(this._craftState.landerWorldPos.y - 6, this._craftState.landerWorldPos.y + 10, earthProgress);
+      const earthZ = THREE.MathUtils.lerp(-70, -260, ease(earthProgress));
+      this.atmosphere.distantEarth.scale.set(earthScale, earthScale, earthScale);
+      this.atmosphere.distantEarth.position.set(earthX, earthY, earthZ);
+    } else {
+      this.atmosphere.distantEarth.visible = false;
+    }
 
     // ----------------------------------------------------
     // BEAT 4 & 5: FAIRING JETTISON, MOON GROWS & LANDER DEPLOY (0.45 - 0.62)
     // ----------------------------------------------------
-    // Photorealistic NASA LRO Moon globe remains visible until surface touchdown (p < 0.80)
-    this.atmosphere.approachMoon.visible = p >= 0.58 && p < 0.80;
+    // Photorealistic NASA LRO Moon globe slowly grows in distance ahead along flight vector (p: 0.50 -> 0.80)
+    this.atmosphere.approachMoon.visible = p >= 0.50 && p < 0.80;
     if (this.atmosphere.approachMoon.visible) {
-      const moonGrow = seg(p, 0.58, 0.80);
-      const moonScale = 0.4 + moonGrow * 1.6;
-      const moonY = THREE.MathUtils.lerp(10, -22, ease(moonGrow));
-      const moonZ = THREE.MathUtils.lerp(-140, -42, ease(moonGrow));
+      const moonGrow = seg(p, 0.50, 0.80);
+      const moonScale = THREE.MathUtils.lerp(0.18, 2.0, Math.pow(moonGrow, 1.7));
+      const moonY = THREE.MathUtils.lerp(this._craftState.landerWorldPos.y + 2, -22, ease(moonGrow));
+      const moonZ = THREE.MathUtils.lerp(-240, -42, ease(moonGrow));
       this.atmosphere.approachMoon.scale.set(moonScale, moonScale, moonScale);
       this.atmosphere.approachMoon.position.set(0, moonY, moonZ);
+    }
+
+    // Subtle dashed orbital trajectory arc during trans-lunar cruise
+    const isCruise = p >= 0.48 && p < 0.65;
+    this.atmosphere.translunarTrajectory.visible = isCruise;
+    if (isCruise) {
+      const trajFade = seg(p, 0.48, 0.53) * (1 - seg(p, 0.61, 0.65));
+      (this.atmosphere.translunarTrajectory.material as THREE.LineDashedMaterial).opacity = 0.45 * trajFade;
+    }
+
+    // Gentle starfield parallax during deep-space travel (10,000+ km/h)
+    if (p >= 0.45 && p <= 0.65) {
+      const cruiseT = seg(p, 0.45, 0.65);
+      this.atmosphere.starfield.position.z = -(cruiseT - 0.5) * 55.0;
+      this.atmosphere.starfield.position.y = -(cruiseT - 0.5) * 18.0;
+    } else {
+      this.atmosphere.starfield.position.set(0, 0, 0);
     }
 
     // Lander deployment state
