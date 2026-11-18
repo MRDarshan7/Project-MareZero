@@ -579,6 +579,18 @@ export class ThreeConductor {
     this.lander.setThrottle(this._craftState.throttle);
     this.lander.setLegCompression(this._craftState.legCompression);
 
+    // Dynamic spacecraft rim lighting: subtle fill during Beat 5 coasting so dark solar wings,
+    // engine bell, and gold foil facets remain crisp against deep space
+    if (p < 0.45) {
+      this.lander.spacecraftRimLight.intensity = 0.0;
+    } else if (p < 0.70) {
+      this.lander.spacecraftRimLight.intensity = THREE.MathUtils.lerp(0.6, 1.25, seg(p, 0.45, 0.58));
+    } else if (p < 0.86) {
+      this.lander.spacecraftRimLight.intensity = THREE.MathUtils.lerp(1.25, 0.65, seg(p, 0.70, 0.85));
+    } else {
+      this.lander.spacecraftRimLight.intensity = 0.65;
+    }
+
     // ----------------------------------------------------
     // BEAT 6: APPROACH & POWERED DESCENT (0.62 - 0.80)
     // ----------------------------------------------------
@@ -709,6 +721,7 @@ export class ThreeConductor {
 
     this.particles.destroy();
     this.skyDome.destroy();
+    this.lander.destroy();
     this.renderer.dispose();
   }
 }

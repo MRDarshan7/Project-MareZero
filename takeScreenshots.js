@@ -60,6 +60,11 @@ async function run() {
   await scrollToProgress(0.48);
   await page.screenshot({ path: path.join(outDir, '03-fairing-separation.png') });
 
+  // 3b. Stage 3b: Beat 5 - Lander separates and unfolds
+  console.log('Capturing stage 3b: Lander separation and unfolding (Beat 5)...');
+  await scrollToProgress(0.60);
+  await page.screenshot({ path: path.join(outDir, '03b-lander-unfolding.png') });
+
   // 4. Stage 4: Lunar powered descent
   console.log('Capturing stage 4: Lunar powered descent...');
   await scrollToProgress(0.72);
