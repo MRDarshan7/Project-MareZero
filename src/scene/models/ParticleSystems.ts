@@ -416,7 +416,7 @@ export class ParticleSystems {
         const r = frac * maxR;
         const puffH = (1.0 - frac * 0.55) * maxH * (0.75 + 0.25 * Math.sin(i * 8.43 + t * 6.0));
 
-        padPos[idx] = 3.5 + Math.cos(theta) * r * 0.85;
+        padPos[idx] = craftRigX + Math.cos(theta) * r * 0.85;
         padPos[idx + 1] = -padDrop + 0.2 + puffH;
         padPos[idx + 2] = Math.sin(theta) * r * zStretch;
 

@@ -102,6 +102,7 @@ export class ThreeConductor {
     // Scene & Camera
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x070b14);
+    this.scene.fog = new THREE.FogExp2(0x070b14, 0.0032);
 
     this.camera = new THREE.PerspectiveCamera(46, this.width / (this.height || 1), 0.1, 1500);
     this.camera.position.set(0, 5, 24);
@@ -468,6 +469,14 @@ export class ThreeConductor {
     const atmoMix = ease(seg(p, 0.12, 0.35));
     this._skyColor.copy(this._dawnColor).lerp(this._spaceColor, atmoMix);
     this.scene.background = this._skyColor;
+
+    // Subtle distance fog: softens the night-launch horizon at Beat 0 (#070b14)
+    // and dissolves into vacuum during ascent (p = 0.12 -> 0.32)
+    if (this.scene.fog) {
+      const atmoFade = 1.0 - seg(p, 0.12, 0.32);
+      (this.scene.fog as THREE.FogExp2).density = 0.0032 * atmoFade;
+      (this.scene.fog as THREE.FogExp2).color.copy(this._skyColor);
+    }
 
     // Stars: visible at Beat 0 night launch (#070b14 fading into a faint starfield), staying crisp in space
     const nightStars = 0.38 * (1 - seg(p, 0.06, 0.16));

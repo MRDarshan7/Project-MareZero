@@ -42,7 +42,7 @@ function createVaporTexture(): THREE.Texture {
 
 /**
  * Creates vertical atmospheric horizon gradient for night launchpad
- * (#070b14 deep indigo fading into night sky).
+ * (#070b14 deep indigo blending smoothly into the dark ground plane).
  */
 function createHorizonTexture(): THREE.Texture {
   if (typeof document === 'undefined') return new THREE.Texture();
@@ -56,10 +56,10 @@ function createHorizonTexture(): THREE.Texture {
     if (!ctx) return new THREE.Texture();
 
     const grad = ctx.createLinearGradient(0, h, 0, 0);
-    grad.addColorStop(0.0, '#04070e');
+    grad.addColorStop(0.0, '#070b14');
     grad.addColorStop(0.12, '#070b14');
     grad.addColorStop(0.32, '#0c152a');
-    grad.addColorStop(0.60, '#070b14');
+    grad.addColorStop(0.55, '#070b14');
     grad.addColorStop(1.0, 'rgba(7, 11, 20, 0.0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
@@ -171,11 +171,12 @@ export class AtmosphereStars {
     this.launchGround = new THREE.Group();
 
     // Massive Horizon Ground Plane (Extends to visible distance R = 400)
+    // Matches the #070b14 background & distance fog so horizon has zero hard edge
     const groundGeo = new THREE.PlaneGeometry(800, 800, 32, 32);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x121824, // Coastal Cape Canaveral marshland / night soil
-      roughness: 0.95,
-      metalness: 0.08
+      color: 0x070b14, // Matches dark night sky & horizon distance fog
+      roughness: 0.96,
+      metalness: 0.05
     });
     const groundMesh = new THREE.Mesh(groundGeo, groundMat);
     groundMesh.rotation.x = -Math.PI / 2;
@@ -183,7 +184,7 @@ export class AtmosphereStars {
     groundMesh.receiveShadow = true;
     this.launchGround.add(groundMesh);
 
-    // Subtle Deep-Indigo Atmospheric Horizon Glow Cylinder (#070b14 fading into faint starfield)
+    // Subtle Deep-Indigo Atmospheric Horizon Glow Cylinder (#070b14 fading into night starfield)
     const horizonGeo = new THREE.CylinderGeometry(380, 380, 160, 32, 1, true);
     const horizonMat = new THREE.MeshBasicMaterial({
       map: createHorizonTexture(),
@@ -193,11 +194,12 @@ export class AtmosphereStars {
       depthWrite: false
     });
     this.horizonGlow = new THREE.Mesh(horizonGeo, horizonMat);
-    this.horizonGlow.position.set(3.5, 45, 0);
+    this.horizonGlow.position.set(0, 45, 0);
     this.launchGround.add(this.horizonGlow);
 
     // ----------------------------------------------------
     // Raised Concrete Mobile Launcher Platform (MLP) & Pedestal
+    // Centered directly at (x: 0, z: 0) directly underneath the rocket nozzles
     // ----------------------------------------------------
     const concreteMat = new THREE.MeshStandardMaterial({
       color: 0x3e4551, // Weathered reinforced concrete
@@ -216,7 +218,7 @@ export class AtmosphereStars {
     });
 
     const mlpGroup = new THREE.Group();
-    mlpGroup.position.set(3.5, 0, 0);
+    mlpGroup.position.set(0, 0, 0);
 
     // Heavy Octagonal Concrete Pedestal Foundation (Top at Y=0, Base at Y=-2.2)
     const octGeo = new THREE.CylinderGeometry(14.0, 15.2, 2.2, 8);
@@ -226,7 +228,7 @@ export class AtmosphereStars {
     octPad.receiveShadow = true;
     mlpGroup.add(octPad);
 
-    // Elevated Center Thrust Mounting Ring Collar right below rocket core
+    // Elevated Center Thrust Mounting Ring Collar directly beneath rocket engine cluster
     const thrustRingGeo = new THREE.CylinderGeometry(2.6, 2.9, 0.4, 32);
     const thrustRing = new THREE.Mesh(thrustRingGeo, steelMat);
     thrustRing.position.y = 0.2;
@@ -254,7 +256,7 @@ export class AtmosphereStars {
     }
 
     // Perimeter Safety Railings along the Raised Pedestal Edge
-    const railRadius = 11.2;
+    const railRadius = 12.0;
     const railPosts = 24;
     const postGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.9, 6);
     const topRailGeo = new THREE.TorusGeometry(railRadius, 0.028, 6, 32);
@@ -279,7 +281,7 @@ export class AtmosphereStars {
     midRail.position.y = 0.45;
     mlpGroup.add(midRail);
 
-    // Central Flame Trench Cutout Beneath Rocket Base (Recessed to Y = -3.8)
+    // Central Flame Trench Cutout directly beneath rocket engines (Recessed to Y = -3.8)
     const trenchMat = new THREE.MeshStandardMaterial({
       color: 0x14171d, // Scorched refractory ceramic & soot
       roughness: 0.95,
@@ -315,18 +317,19 @@ export class AtmosphereStars {
     this.launchGround.add(mlpGroup);
 
     // ----------------------------------------------------
-    // Four Tall Lightning Protection Masts around Pad Corners
+    // Four Lightning Protection Masts repositioned inward onto pad corners
+    // Height scaled down to 29.5 so beacons stay comfortably below top viewport edge
     // ----------------------------------------------------
     const mastCoords: Array<[number, number]> = [
-      [3.5 - 13.5, 12.0],  // Front-Left (-10.0, 12.0)
-      [3.5 + 13.5, 12.0],  // Front-Right (17.0, 12.0)
-      [3.5 - 13.5, -12.0], // Rear-Left (-10.0, -12.0)
-      [3.5 + 13.5, -12.0]  // Rear-Right (17.0, -12.0)
+      [-9.5, 8.5],   // Front-Left corner of pad structure
+      [9.5, 8.5],    // Front-Right corner of pad structure
+      [-9.5, -8.5],  // Rear-Left corner of pad structure
+      [9.5, -8.5]    // Rear-Right corner of pad structure
     ];
 
-    const mastH = 38.0;
-    const mastPylonGeo = new THREE.CylinderGeometry(0.12, 0.52, mastH, 8);
-    const spireGeo = new THREE.CylinderGeometry(0.02, 0.08, 3.2, 6);
+    const mastH = 29.5;
+    const mastPylonGeo = new THREE.CylinderGeometry(0.12, 0.50, mastH, 8);
+    const spireGeo = new THREE.CylinderGeometry(0.02, 0.08, 2.4, 6);
     const beaconGeo = new THREE.SphereGeometry(0.22, 8, 8);
 
     for (let m = 0; m < mastCoords.length; m++) {
@@ -341,26 +344,26 @@ export class AtmosphereStars {
 
       // Main Steel Lattice Tapered Pylon
       const pylon = new THREE.Mesh(mastPylonGeo, steelMat);
-      pylon.position.y = mastH / 2 - 2.0; // from Y=-2 up to Y=36
+      pylon.position.y = mastH / 2 - 2.0; // extends up to Y=27.5
       mastGroup.add(pylon);
 
       // Intermediate Service Platforms
-      for (const py of [10.0, 22.0]) {
-        const plat = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.15, 8), steelMat);
+      for (const py of [8.0, 18.0]) {
+        const plat = new THREE.Mesh(new THREE.CylinderGeometry(0.70, 0.70, 0.15, 8), steelMat);
         plat.position.y = py;
         mastGroup.add(plat);
       }
 
       // Top Lightning Arrestor Needle Spire
       const spire = new THREE.Mesh(spireGeo, steelMat);
-      spire.position.y = mastH - 2.0 + 1.6;
+      spire.position.y = mastH - 2.0 + 1.2;
       mastGroup.add(spire);
 
-      // Tiny Red Aviation Warning Beacon at Mast Apex
+      // Tiny Red Aviation Warning Beacon at Mast Apex (stays cleanly below top of viewport at Y=29.9)
       const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff1122 });
       this.beaconMaterials.push(beaconMat);
       const beacon = new THREE.Mesh(beaconGeo, beaconMat);
-      beacon.position.y = mastH - 2.0 + 3.2;
+      beacon.position.y = mastH - 2.0 + 2.4;
       mastGroup.add(beacon);
 
       const haloMat = new THREE.MeshBasicMaterial({
@@ -386,9 +389,10 @@ export class AtmosphereStars {
 
     // ----------------------------------------------------
     // Open Steel Lattice Launch Umbilical Tower (Detailed)
+    // Standing cleanly beside rocket at x = -6.0, z = -1.6 inside pad perimeter
     // ----------------------------------------------------
     const towerGroup = new THREE.Group();
-    towerGroup.position.set(-4.5, 0, -3.5);
+    towerGroup.position.set(-6.0, 0, -1.6);
 
     const trussMat = new THREE.MeshStandardMaterial({
       color: 0x475569,
@@ -397,7 +401,7 @@ export class AtmosphereStars {
     });
 
     const towerH = 35.0;
-    const towerW = 3.4;
+    const towerW = 3.2;
 
     // 4 Vertical Corner Steel Columns (Legs)
     const legGeo = new THREE.BoxGeometry(0.36, towerH, 0.36);
@@ -521,7 +525,7 @@ export class AtmosphereStars {
 
     // Crew / Payload Access Room ("White Room" Cleanroom near top at Y = 25.5)
     const cleanroomGroup = new THREE.Group();
-    cleanroomGroup.position.set(towerW / 2 + 0.4, 25.5, 0.4);
+    cleanroomGroup.position.set(towerW / 2 + 0.3, 25.5, 0.2);
 
     const roomMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.40, metalness: 0.15 });
     const windowMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.10, metalness: 0.90 });
@@ -557,25 +561,28 @@ export class AtmosphereStars {
     // ----------------------------------------------------
     // Two Articulated Umbilical Swing Arms (Retract on liftoff in Beat 1)
     // ----------------------------------------------------
+    const boomLen = 3.4;
+
     // 1. Upper Stage Umbilical Swing Arm (Stage 2 & Payload Service, Y = 21.0)
     this.swingArm = new THREE.Group();
     this.swingArm.position.set(towerW / 2, 21.0, 0);
+    this.swingArm.rotation.y = 0.35; // angled cleanly toward rocket center
 
-    const upperBoomGeo = new THREE.BoxGeometry(5.2, 0.75, 0.8);
+    const upperBoomGeo = new THREE.BoxGeometry(boomLen, 0.70, 0.75);
     const upperBoom = new THREE.Mesh(upperBoomGeo, steelMat);
-    upperBoom.position.x = 2.6; // extends rightward toward rocket at x = 3.5
+    upperBoom.position.x = boomLen / 2;
     this.swingArm.add(upperBoom);
 
     // Upper Umbilical Disconnect Carrier Head & Flexible Lines
-    const upperHeadGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.8, 12);
+    const upperHeadGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.7, 12);
     const upperHead = new THREE.Mesh(upperHeadGeo, concreteMat);
     upperHead.rotation.z = Math.PI / 2;
-    upperHead.position.set(5.2, 0, 0);
+    upperHead.position.set(boomLen, 0, 0);
     this.swingArm.add(upperHead);
 
-    const upperHoseGeo = new THREE.TorusGeometry(0.4, 0.06, 6, 12, Math.PI);
+    const upperHoseGeo = new THREE.TorusGeometry(0.35, 0.05, 6, 12, Math.PI);
     const upperHose = new THREE.Mesh(upperHoseGeo, loxPipeMat);
-    upperHose.position.set(4.9, -0.4, 0);
+    upperHose.position.set(boomLen - 0.3, -0.35, 0);
     upperHose.rotation.z = Math.PI;
     this.swingArm.add(upperHose);
 
@@ -584,21 +591,22 @@ export class AtmosphereStars {
     // 2. First Stage / Booster Umbilical Swing Arm (Y = 9.5)
     this.boosterSwingArm = new THREE.Group();
     this.boosterSwingArm.position.set(towerW / 2, 9.5, 0);
+    this.boosterSwingArm.rotation.y = 0.35;
 
-    const lowerBoomGeo = new THREE.BoxGeometry(5.2, 0.70, 0.75);
+    const lowerBoomGeo = new THREE.BoxGeometry(boomLen, 0.65, 0.70);
     const lowerBoom = new THREE.Mesh(lowerBoomGeo, steelMat);
-    lowerBoom.position.x = 2.6;
+    lowerBoom.position.x = boomLen / 2;
     this.boosterSwingArm.add(lowerBoom);
 
-    const lowerHeadGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.7, 12);
+    const lowerHeadGeo = new THREE.CylinderGeometry(0.30, 0.30, 0.65, 12);
     const lowerHead = new THREE.Mesh(lowerHeadGeo, concreteMat);
     lowerHead.rotation.z = Math.PI / 2;
-    lowerHead.position.set(5.2, 0, 0);
+    lowerHead.position.set(boomLen, 0, 0);
     this.boosterSwingArm.add(lowerHead);
 
-    const lowerHoseGeo = new THREE.TorusGeometry(0.35, 0.05, 6, 12, Math.PI);
+    const lowerHoseGeo = new THREE.TorusGeometry(0.32, 0.05, 6, 12, Math.PI);
     const lowerHose = new THREE.Mesh(lowerHoseGeo, fuelPipeMat);
-    lowerHose.position.set(4.9, -0.35, 0);
+    lowerHose.position.set(boomLen - 0.3, -0.32, 0);
     lowerHose.rotation.z = Math.PI;
     this.boosterSwingArm.add(lowerHose);
 
@@ -607,14 +615,14 @@ export class AtmosphereStars {
     this.launchGround.add(towerGroup);
 
     // ----------------------------------------------------
-    // 4 Hold-Down Clamps around rocket base
+    // 4 Hold-Down Clamps centered directly around rocket base (x: 0, z: 0)
     // ----------------------------------------------------
     const clampMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.4, metalness: 0.8 }); // Safety amber
     for (let c = 0; c < 4; c++) {
       const angle = (c * Math.PI) / 2 + Math.PI / 4;
       const clampGroup = new THREE.Group();
       clampGroup.position.set(
-        3.5 + Math.cos(angle) * 2.3,
+        Math.cos(angle) * 2.3,
         0,
         Math.sin(angle) * 2.3
       );
@@ -637,12 +645,13 @@ export class AtmosphereStars {
 
     // ----------------------------------------------------
     // Night-Launch Stadium Floodlights & Volumetric Beam Cones
+    // Aimed directly at rocket center (x: 0, z: 0)
     // ----------------------------------------------------
     const floodlightConfigs = [
       {
         // Floodlight 1: Front-Right key light illuminating MAREZERO livery & Indian flag
-        pos: new THREE.Vector3(10.5, 3.8, 8.5),
-        target: new THREE.Vector3(3.5, 12.0, 0),
+        pos: new THREE.Vector3(7.2, 3.8, 8.5),
+        target: new THREE.Vector3(0, 12.0, 0),
         color: 0xecfeff,
         intensity: 8.5,
         beamColor: 0x93c5fd,
@@ -650,8 +659,8 @@ export class AtmosphereStars {
       },
       {
         // Floodlight 2: Front-Left tower / upper stage highlight
-        pos: new THREE.Vector3(-7.5, 6.5, 7.0),
-        target: new THREE.Vector3(3.5, 19.5, 0),
+        pos: new THREE.Vector3(-9.2, 6.5, 6.5),
+        target: new THREE.Vector3(0, 19.5, 0),
         color: 0xf8fafc,
         intensity: 6.5,
         beamColor: 0xbfdbfe,
@@ -659,8 +668,8 @@ export class AtmosphereStars {
       },
       {
         // Floodlight 3: Rear-Right crisp cool-cyan back-rim highlight
-        pos: new THREE.Vector3(9.5, 4.8, -9.0),
-        target: new THREE.Vector3(3.5, 11.0, 0),
+        pos: new THREE.Vector3(6.8, 4.8, -9.0),
+        target: new THREE.Vector3(0, 11.0, 0),
         color: 0x7dd3fc,
         intensity: 7.2,
         beamColor: 0x7dd3fc,
@@ -714,18 +723,19 @@ export class AtmosphereStars {
       });
     }
 
-    // Ignition Flash Light at pad base
+    // Ignition Flash Light directly at rocket base
     this.ignitionLight = new THREE.PointLight(0xff7711, 0, 45, 1.6);
-    this.ignitionLight.position.set(3.5, 0.5, 0);
+    this.ignitionLight.position.set(0, 0.5, 0);
     this.launchGround.add(this.ignitionLight);
 
     // ----------------------------------------------------
     // Soft Volumetric Cryogenic Vent Vapor (Semi-transparent billboarded sprites)
+    // Directly venting from upper stage LOX valve at x = 1.62, y = 20.8
     // ----------------------------------------------------
     const vaporGeo = new THREE.BufferGeometry();
     this.vaporPositions = new Float32Array(this.vaporCount * 3);
 
-    // Initialize with soft dispersed plume right of the upper stage (vent at X=5.12, Y=20.8)
+    // Initialize with soft dispersed plume right of the upper stage (vent at X=1.62, Y=20.8)
     for (let i = 0; i < this.vaporCount; i++) {
       const idx = i * 3;
       const life = i / this.vaporCount;
@@ -734,7 +744,7 @@ export class AtmosphereStars {
       const driftZ = Math.sin(i * 3.7) * (0.45 * life);
       const jitter = Math.sin(i * 11.3) * (0.2 * life);
 
-      this.vaporPositions[idx] = 5.12 + driftX + jitter;
+      this.vaporPositions[idx] = 1.62 + driftX + jitter;
       this.vaporPositions[idx + 1] = 20.8 + driftY + jitter;
       this.vaporPositions[idx + 2] = 0.2 + driftZ;
     }
@@ -877,7 +887,7 @@ export class AtmosphereStars {
    * Deterministic cryogenic vapor billow simulation
    */
   private updateVaporParticles(timeSec: number): void {
-    const ventX = 5.12;
+    const ventX = 1.62;
     const ventY = 20.8;
     const ventZ = 0.2;
     const pos = this.vaporPositions;
@@ -909,9 +919,9 @@ export class AtmosphereStars {
 
     // Swing Arms Retraction (p = 0.05 -> 0.10 in Beat 1)
     const armRetract = seg(0.05, 0.10);
-    this.swingArm.rotation.y = -armRetract * 1.38; // swings ~79° away from upper stage
+    this.swingArm.rotation.y = 0.35 - armRetract * 1.45; // swings ~83° back clear of upper stage
     if (this.boosterSwingArm) {
-      this.boosterSwingArm.rotation.y = -armRetract * 1.30; // swings ~74° away from booster
+      this.boosterSwingArm.rotation.y = 0.35 - armRetract * 1.40; // swings ~80° back clear of booster
     }
 
     // Hold-Down Clamps Release (p = 0.07 -> 0.09)
