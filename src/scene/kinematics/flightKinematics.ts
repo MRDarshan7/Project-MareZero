@@ -15,6 +15,8 @@ export interface RocketDimensions {
   stackLanderOffset: number; // Height from rocket base to lander mounting deck
 }
 
+export const LANDER_MOUNT_OFFSET = 1.0;
+
 export const ROCKET_DIMS: RocketDimensions = {
   boosterHeight: 16.0,
   boosterRadius: 1.6,
@@ -24,7 +26,7 @@ export const ROCKET_DIMS: RocketDimensions = {
   fairingHeight: 7.5,
   fairingRadius: 1.85,
   totalHeight: 16.0 + 1.4 + 7.0 + 1.2 + 7.5, // 33.1 units
-  stackLanderOffset: 16.0 + 1.4 + 7.0 + 1.2 + 0.3 // 25.9 units
+  stackLanderOffset: 16.0 + 1.4 + 7.0 + 1.2 + LANDER_MOUNT_OFFSET // 26.6 units
 };
 
 // Pure math helper functions
@@ -243,24 +245,25 @@ export function computeCraftState(
     fairingRightPos.set(craftRigX, fairingMountY, craftRigZ);
     fairingRightRot.set(0, 0, 0);
   } else {
-    const tFairing = (p - 0.45) / 0.15;
-    const lateralSpread = tFairing * 10.5;
-    const fairingDrop = tFairing * tFairing * 24.0;
-    const pitchOut = tFairing * 1.25;
+    const tFairing = (p - 0.45) / 0.10;
+    const lateralSpread = tFairing * 5.5 + tFairing * tFairing * 8.0;
+    const fairingDrop = tFairing * 1.5 + tFairing * tFairing * 10.0;
+    const hingeAngle = Math.min(1.4, tFairing * 1.6);
+    const tumble = tFairing * 0.35;
 
     fairingLeftPos.set(
       craftRigX - lateralSpread,
       fairingMountY - fairingDrop,
       craftRigZ
     );
-    fairingLeftRot.set(0, tFairing * 0.5, pitchOut);
+    fairingLeftRot.set(tumble * 0.4, tumble, hingeAngle);
 
     fairingRightPos.set(
       craftRigX + lateralSpread,
       fairingMountY - fairingDrop,
       craftRigZ
     );
-    fairingRightRot.set(0, -tFairing * 0.5, -pitchOut);
+    fairingRightRot.set(tumble * 0.4, -tumble, -hingeAngle);
   }
 
   // -------------------------------------------------------------------------

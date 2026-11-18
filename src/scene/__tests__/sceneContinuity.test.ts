@@ -73,7 +73,7 @@ class HeadlessSceneRig {
       if (this.lander.group.parent !== this.rocket.payloadAdapter) {
         this.rocket.payloadAdapter.add(this.lander.group);
       }
-      this.lander.group.position.set(0, this.rocket.adapterHeight + 0.3, 0);
+      this.lander.group.position.set(0, this.rocket.adapterHeight + this.rocket.landerMountOffset, 0);
       this.lander.group.rotation.set(0, 0, 0);
       this.lander.group.scale.set(1.0, 1.0, 1.0);
     }
@@ -92,10 +92,10 @@ describe('Scene Graph Continuity & Kinematics Tests', () => {
     const rig = new HeadlessSceneRig();
     const step = 0.002;
     let prevPos: THREE.Vector3 | null = null;
-    // Theoretical max derivative of smoothstep curve over translunar transfer (dist 40.71 over dp 0.07)
-    // is (40.71 / 0.07) * 1.5 * 0.002 = 1.745 units per 0.002 step.
-    // Set threshold to 1.76 to prove C1 continuity (vs old 25.9 defect jump which is 15x higher)
-    const maxThreshold = 1.76;
+    // Theoretical max derivative of smoothstep curve over translunar transfer (dist 41.38 over dp 0.07)
+    // is (41.38 / 0.07) * 1.5 * 0.002 = 1.773 units per 0.002 step.
+    // Set threshold to 1.80 to prove C1 continuity (vs old 25.9 defect jump which is 15x higher)
+    const maxThreshold = 1.80;
 
     for (let p = 0; p <= 1.0; p += step) {
       rig.evaluateProgress(p);

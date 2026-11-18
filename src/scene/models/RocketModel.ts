@@ -47,13 +47,14 @@ export class RocketModel {
   public readonly adapterHeight = 1.2;
   public readonly fairingHeight = 7.5;
   public readonly fairingRadius = 1.85;
+  public readonly landerMountOffset = 1.0;
 
   public get totalHeight(): number {
     return this.boosterHeight + this.interstageHeight + this.upperStageHeight + this.adapterHeight + this.fairingHeight;
   }
 
   public get stackLanderOffset(): number {
-    return this.boosterHeight + this.interstageHeight + this.upperStageHeight + this.adapterHeight + 0.3;
+    return this.boosterHeight + this.interstageHeight + this.upperStageHeight + this.adapterHeight + this.landerMountOffset;
   }
 
   constructor(landerInstance: LanderModel) {
@@ -230,7 +231,9 @@ export class RocketModel {
       this.boosterRadius,
       this.boosterRadius,
       this.interstageHeight,
-      36
+      36,
+      1,
+      true // openEnded hollow interstage skirt
     );
     const interMesh = new THREE.Mesh(interGeo, interstageMat);
     interMesh.position.y = this.interstageHeight / 2;
@@ -254,11 +257,60 @@ export class RocketModel {
     upperMesh.position.y = this.upperStageHeight / 2;
     this.upperStage.add(upperMesh);
 
-    // High-expansion vacuum engine nozzle inside interstage
-    const vacNozzleGeo = new THREE.ConeGeometry(0.9, 1.8, 24, 1, true);
-    const vacNozzle = new THREE.Mesh(vacNozzleGeo, engineMetalMat);
-    vacNozzle.position.y = -0.5;
-    this.upperStage.add(vacNozzle);
+    // Dark metallic vacuum engine assembly
+    const vacNozzleMat = new THREE.MeshStandardMaterial({
+      color: 0x1c1f24,
+      roughness: 0.35,
+      metalness: 0.88,
+      side: THREE.DoubleSide
+    });
+    const throatMat = new THREE.MeshStandardMaterial({
+      color: 0xd97706,
+      emissive: 0x7c2d12,
+      emissiveIntensity: 0.75,
+      roughness: 0.35,
+      metalness: 0.5
+    });
+    const coolingRingMat = new THREE.MeshStandardMaterial({
+      color: 0x4a505b,
+      roughness: 0.28,
+      metalness: 0.92
+    });
+
+    const vacEngineGroup = new THREE.Group();
+    vacEngineGroup.name = 'UpperStageVacuumEngine';
+
+    // Powerhead / Gimbal Ring Assembly
+    const gimbalGeo = new THREE.CylinderGeometry(0.55, 0.58, 0.35, 24);
+    const gimbalMesh = new THREE.Mesh(gimbalGeo, engineMetalMat);
+    gimbalMesh.position.y = -0.22;
+    vacEngineGroup.add(gimbalMesh);
+
+    // High-expansion vacuum engine nozzle bell
+    // Extends down from -0.4 to -2.2 (exit diameter 2.1, extends 0.8 units below interstage skirt at y = -1.4)
+    const vacBellHeight = 1.8;
+    const vacBellGeo = new THREE.CylinderGeometry(0.38, 1.05, vacBellHeight, 32, 1, true);
+    const vacBell = new THREE.Mesh(vacBellGeo, vacNozzleMat);
+    vacBell.position.y = -0.4 - vacBellHeight / 2; // -1.30
+    vacEngineGroup.add(vacBell);
+
+    // Glowing warm combustion throat insert
+    const throatGeo = new THREE.CylinderGeometry(0.24, 0.36, 0.42, 24);
+    const throatMesh = new THREE.Mesh(throatGeo, throatMat);
+    throatMesh.position.y = -0.42;
+    vacEngineGroup.add(throatMesh);
+
+    // 3 Exterior horizontal stiffening / cooling rings around outer bell
+    const ringRadii = [0.62, 0.82, 1.02];
+    const ringYs = [-0.95, -1.50, -2.12];
+    for (let r = 0; r < 3; r++) {
+      const ringGeo = new THREE.CylinderGeometry(ringRadii[r] + 0.03, ringRadii[r] + 0.03, 0.05, 32, 1, true);
+      const ringMesh = new THREE.Mesh(ringGeo, coolingRingMat);
+      ringMesh.position.y = ringYs[r];
+      vacEngineGroup.add(ringMesh);
+    }
+
+    this.upperStage.add(vacEngineGroup);
 
     // Upper Stage Vacuum Plume (Bluer/cyan LH2-LOX / Methane flame)
     const upperFlameMat = new THREE.MeshBasicMaterial({
@@ -266,14 +318,14 @@ export class RocketModel {
       transparent: true,
       opacity: 0.92
     });
-    this.upperPlume = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3.8, 16), upperFlameMat);
+    this.upperPlume = new THREE.Mesh(new THREE.ConeGeometry(1.25, 4.0, 16), upperFlameMat);
     this.upperPlume.rotation.x = Math.PI;
-    this.upperPlume.position.y = -2.2;
+    this.upperPlume.position.y = -4.2;
     this.upperPlume.visible = false;
     this.upperStage.add(this.upperPlume);
 
     this.upperLight = new THREE.PointLight(0x38bdf8, 0, 40, 1.8);
-    this.upperLight.position.set(0, -1.8, 0);
+    this.upperLight.position.set(0, -2.2, 0);
     this.upperStage.add(this.upperLight);
 
     // ==========================================
@@ -295,43 +347,97 @@ export class RocketModel {
     adapterMesh.position.y = this.adapterHeight / 2;
     this.payloadAdapter.add(adapterMesh);
 
+    // Upper deck mounting ring plate
+    const adapterDeckGeo = new THREE.CylinderGeometry(this.fairingRadius * 0.98, this.fairingRadius, 0.12, 36);
+    const adapterDeck = new THREE.Mesh(adapterDeckGeo, interstageMat);
+    adapterDeck.position.y = this.adapterHeight;
+    this.payloadAdapter.add(adapterDeck);
+
+    // Payload separation clamp ring
+    const clampRingGeo = new THREE.CylinderGeometry(1.42, 1.48, 0.14, 36, 1, true);
+    const clampRingMat = new THREE.MeshStandardMaterial({ color: 0x22262d, roughness: 0.45, metalness: 0.8 });
+    const clampRing = new THREE.Mesh(clampRingGeo, clampRingMat);
+    clampRing.position.y = this.adapterHeight + 0.07;
+    this.payloadAdapter.add(clampRing);
+
     // ==========================================
     // 5. LANDER (STOWED CHILD OF PAYLOAD ADAPTER)
     // ==========================================
     // Nested inside the payload adapter from frame 0!
-    // Offset so lander sits securely atop the adapter deck
-    this.lander.group.position.set(0, this.adapterHeight + 0.3, 0);
+    // Offset so lander sits securely atop the adapter deck cleanly above the adapter ring
+    this.lander.group.position.set(0, this.adapterHeight + this.landerMountOffset, 0);
     this.lander.group.scale.set(1.0, 1.0, 1.0);
     this.payloadAdapter.add(this.lander.group);
 
     // ==========================================
-    // 6. PAYLOAD FAIRINGS (LEFT & RIGHT)
+    // 6. PAYLOAD FAIRINGS (LEFT & RIGHT CLAMSHELL)
     // ==========================================
-    // Tangent Ogive Curve:
-    // r(y) = R * sqrt(max(0, 1 - (y / H)^1.8))
-    const fairingPoints: THREE.Vector2[] = [];
-    const segments = 24;
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      const y = t * this.fairingHeight;
-      const r = this.fairingRadius * Math.sqrt(Math.max(0.02, 1 - Math.pow(t, 1.75)));
-      fairingPoints.push(new THREE.Vector2(r, y));
-    }
+    const barrelHeight = 3.2;
+    const coneHeight = this.fairingHeight - barrelHeight; // 4.3
 
-    const fairingLeftGeo = new THREE.LatheGeometry(fairingPoints, 24, 0, Math.PI);
-    const fairingRightGeo = new THREE.LatheGeometry(fairingPoints, 24, Math.PI, Math.PI);
+    // Left Clamshell Half (-X half: thetaStart = Math.PI, thetaLength = Math.PI)
+    const cylLeftGeo = new THREE.CylinderGeometry(
+      this.fairingRadius,
+      this.fairingRadius,
+      barrelHeight,
+      36,
+      1,
+      true,
+      Math.PI,
+      Math.PI
+    );
+    cylLeftGeo.translate(0, barrelHeight / 2, 0);
+
+    const coneLeftGeo = new THREE.ConeGeometry(
+      this.fairingRadius,
+      coneHeight,
+      36,
+      1,
+      true,
+      Math.PI,
+      Math.PI
+    );
+    coneLeftGeo.translate(0, barrelHeight + coneHeight / 2, 0);
 
     this.fairingLeft = new THREE.Group();
     this.fairingLeft.name = 'FairingLeft';
-    const fairingLeftMesh = new THREE.Mesh(fairingLeftGeo, fairingMat);
-    this.fairingLeft.add(fairingLeftMesh);
+    const fairingLeftCyl = new THREE.Mesh(cylLeftGeo, fairingMat);
+    const fairingLeftCone = new THREE.Mesh(coneLeftGeo, fairingMat);
+    this.fairingLeft.add(fairingLeftCyl);
+    this.fairingLeft.add(fairingLeftCone);
     this.fairingLeft.position.set(0, this.adapterHeight, 0);
     this.payloadAdapter.add(this.fairingLeft);
 
+    // Right Clamshell Half (+X half: thetaStart = 0, thetaLength = Math.PI)
+    const cylRightGeo = new THREE.CylinderGeometry(
+      this.fairingRadius,
+      this.fairingRadius,
+      barrelHeight,
+      36,
+      1,
+      true,
+      0,
+      Math.PI
+    );
+    cylRightGeo.translate(0, barrelHeight / 2, 0);
+
+    const coneRightGeo = new THREE.ConeGeometry(
+      this.fairingRadius,
+      coneHeight,
+      36,
+      1,
+      true,
+      0,
+      Math.PI
+    );
+    coneRightGeo.translate(0, barrelHeight + coneHeight / 2, 0);
+
     this.fairingRight = new THREE.Group();
     this.fairingRight.name = 'FairingRight';
-    const fairingRightMesh = new THREE.Mesh(fairingRightGeo, fairingMat);
-    this.fairingRight.add(fairingRightMesh);
+    const fairingRightCyl = new THREE.Mesh(cylRightGeo, fairingMat);
+    const fairingRightCone = new THREE.Mesh(coneRightGeo, fairingMat);
+    this.fairingRight.add(fairingRightCyl);
+    this.fairingRight.add(fairingRightCone);
     this.fairingRight.position.set(0, this.adapterHeight, 0);
     this.payloadAdapter.add(this.fairingRight);
 
@@ -445,26 +551,27 @@ export class RocketModel {
         this.sceneRoot.attach(this.fairingRight);
         this.isFairingDetached = true;
       }
-      const tFairing = (p - 0.45) / 0.15;
-      const lateralSpread = tFairing * 9.5;
-      const fairingDrop = tFairing * tFairing * 22.0;
-      const pitchOut = tFairing * 1.2;
+      const tFairing = (p - 0.45) / 0.10;
+      const lateralSpread = tFairing * 5.5 + tFairing * tFairing * 8.0;
+      const fairingDrop = tFairing * 1.5 + tFairing * tFairing * 10.0;
+      const hingeAngle = Math.min(1.4, tFairing * 1.6);
+      const tumble = tFairing * 0.35;
+
+      const fairingMountY = craftWorldPos.y + this.boosterHeight + this.interstageHeight + this.upperStageHeight + this.adapterHeight;
 
       this.fairingLeft.position.set(
         craftWorldPos.x - lateralSpread,
-        craftWorldPos.y + (this.upperStageHeight * 0.4) - fairingDrop,
+        fairingMountY - fairingDrop,
         craftWorldPos.z
       );
-      this.fairingLeft.rotation.z = pitchOut;
-      this.fairingLeft.rotation.y = tFairing * 0.5;
+      this.fairingLeft.rotation.set(tumble * 0.4, tumble, hingeAngle);
 
       this.fairingRight.position.set(
         craftWorldPos.x + lateralSpread,
-        craftWorldPos.y + (this.upperStageHeight * 0.4) - fairingDrop,
+        fairingMountY - fairingDrop,
         craftWorldPos.z
       );
-      this.fairingRight.rotation.z = -pitchOut;
-      this.fairingRight.rotation.y = -tFairing * 0.5;
+      this.fairingRight.rotation.set(tumble * 0.4, -tumble, -hingeAngle);
     }
 
     // ----------------------------------------------------
@@ -473,7 +580,7 @@ export class RocketModel {
     if (p < 0.55) {
       if (this.isLanderReleased) {
         this.payloadAdapter.add(this.lander.group);
-        this.lander.group.position.set(0, this.adapterHeight + 0.3, 0);
+        this.lander.group.position.set(0, this.adapterHeight + this.landerMountOffset, 0);
         this.lander.group.rotation.set(0, 0, 0);
         this.lander.group.scale.set(1, 1, 1);
         this.isLanderReleased = false;
