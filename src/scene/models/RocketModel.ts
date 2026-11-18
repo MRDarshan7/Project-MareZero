@@ -530,6 +530,7 @@ export class RocketModel {
       );
       this.boosterStage.rotation.z = tBooster * 0.85;
       this.boosterStage.rotation.x = tBooster * 0.45;
+      this.boosterStage.visible = p < 0.52;
     }
 
     // ----------------------------------------------------
@@ -545,6 +546,8 @@ export class RocketModel {
         this.fairingRight.rotation.set(0, 0, 0);
         this.isFairingDetached = false;
       }
+      this.fairingLeft.visible = true;
+      this.fairingRight.visible = true;
     } else {
       if (!this.isFairingDetached && this.sceneRoot) {
         this.sceneRoot.attach(this.fairingLeft);
@@ -572,6 +575,9 @@ export class RocketModel {
         craftWorldPos.z
       );
       this.fairingRight.rotation.set(tumble * 0.4, -tumble, -hingeAngle);
+
+      this.fairingLeft.visible = p < 0.60;
+      this.fairingRight.visible = p < 0.60;
     }
 
     // ----------------------------------------------------
@@ -591,25 +597,37 @@ export class RocketModel {
         this.upperStage.rotation.set(0, 0, 0);
         this.upperStage.scale.set(1, 1, 1);
       }
+      this.upperStage.visible = true;
     } else {
       if (!this.isLanderReleased && this.sceneRoot) {
         this.sceneRoot.attach(this.lander.group);
         this.isLanderReleased = true;
       }
-      // Upper stage and payload adapter fall away backwards into -Y and -Z behind camera
-      const tStage2 = (p - 0.55) / 0.15;
-      const stage2DropY = tStage2 * 14.0 + tStage2 * tStage2 * 35.0;
-      const stage2DropZ = tStage2 * 12.0 + tStage2 * tStage2 * 30.0;
       if (this.upperStage.parent === this.interstage && this.sceneRoot) {
         this.sceneRoot.attach(this.upperStage);
       }
-      this.upperStage.position.set(
-        craftWorldPos.x + Math.sin(tStage2 * 2) * 1.5,
-        craftWorldPos.y + this.boosterHeight + this.interstageHeight - stage2DropY,
-        craftWorldPos.z - stage2DropZ
-      );
-      this.upperStage.rotation.x = tStage2 * 0.7;
-      this.upperStage.rotation.z = tStage2 * 0.35;
+
+      if (p >= 0.62) {
+        // By the end of Beat 5 and throughout Beats 6-8, spent upper stage is completely hidden
+        this.upperStage.visible = false;
+        this.upperStage.scale.set(0, 0, 0);
+      } else {
+        // During Beat 5 (0.55 -> 0.62): drifts away backwards and scales/fades out cleanly
+        this.upperStage.visible = true;
+        const tStage2 = (p - 0.55) / 0.07;
+        const stage2DropY = tStage2 * 18.0 + tStage2 * tStage2 * 45.0;
+        const stage2DropZ = tStage2 * 24.0 + tStage2 * tStage2 * 65.0;
+        const stage2Scale = Math.max(0.001, 1.0 - tStage2);
+
+        this.upperStage.scale.set(stage2Scale, stage2Scale, stage2Scale);
+        this.upperStage.position.set(
+          craftWorldPos.x + Math.sin(tStage2 * 2.5) * 2.5,
+          craftWorldPos.y + this.boosterHeight + this.interstageHeight - stage2DropY,
+          craftWorldPos.z - stage2DropZ
+        );
+        this.upperStage.rotation.x = tStage2 * 0.7;
+        this.upperStage.rotation.z = tStage2 * 0.35;
+      }
     }
   }
 }

@@ -279,15 +279,15 @@ export function computeCraftState(
     upperStageWorldPos.set(craftRigX, upperStageBaseY, craftRigZ);
     upperStageWorldRot.set(0, 0, 0);
   } else {
-    const tUpper = (p - 0.55) / 0.15;
-    const upperDrop = tUpper * 10.0 + tUpper * tUpper * 26.0;
+    const tUpper = Math.min(1.0, Math.max(0.0, (p - 0.55) / 0.07));
+    const upperDrop = tUpper * 18.0 + tUpper * tUpper * 45.0;
 
     upperStageWorldPos.set(
-      craftRigX + Math.sin(tUpper * 2) * 1.2,
+      craftRigX + Math.sin(tUpper * 2.5) * 2.5,
       upperStageBaseY - upperDrop,
-      craftRigZ - upperDrop * 0.4
+      craftRigZ - (tUpper * 24.0 + tUpper * tUpper * 65.0)
     );
-    upperStageWorldRot.set(tUpper * 0.65, 0, tUpper * 0.35);
+    upperStageWorldRot.set(tUpper * 0.7, 0, tUpper * 0.35);
   }
 
   // Gentle spacecraft axial roll during translunar coast (barbecue thermal roll)

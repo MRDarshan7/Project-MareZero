@@ -619,15 +619,43 @@ export class ThreeConductor {
     }
 
     // ----------------------------------------------------
-    // BEAT 4 & 5: FAIRING JETTISON, MOON GROWS & LANDER DEPLOY (0.45 - 0.62)
+    // BEAT 4, 5 & 6: APPROACH MOON & POWERED DESCENT (0.50 - 0.80)
     // ----------------------------------------------------
-    // Photorealistic NASA LRO Moon globe slowly grows in distance ahead along flight vector (p: 0.50 -> 0.80)
+    // Photorealistic NASA LRO Moon globe: grows in deep space during translunar cruise (0.50 - 0.62)
+    // and scales up to fill the lower half of the viewport during low-altitude powered descent (0.62 - 0.80)
     this.atmosphere.approachMoon.visible = p >= 0.50 && p < 0.80;
     if (this.atmosphere.approachMoon.visible) {
-      const moonGrow = seg(p, 0.50, 0.80);
-      const moonScale = THREE.MathUtils.lerp(0.18, 2.0, Math.pow(moonGrow, 1.7));
-      const moonY = THREE.MathUtils.lerp(this._craftState.landerWorldPos.y + 2, -22, ease(moonGrow));
-      const moonZ = THREE.MathUtils.lerp(-240, -42, ease(moonGrow));
+      let moonScale = 0.20;
+      let moonY = 0;
+      let moonZ = -240.0;
+
+      if (p < 0.62) {
+        // Deep-space translunar approach (0.50 -> 0.62):
+        // Moon globe grows from distant speck to lunar orbit entry
+        const approachT = seg(p, 0.50, 0.62);
+        moonScale = THREE.MathUtils.lerp(0.20, 2.0, Math.pow(approachT, 1.5));
+        const moonR = 22.0 * moonScale;
+        const crestOffsetY = THREE.MathUtils.lerp(18.0, 7.5, ease(approachT));
+        const horizonCrestY = this._craftState.landerWorldPos.y - crestOffsetY;
+        moonY = horizonCrestY - moonR;
+        moonZ = THREE.MathUtils.lerp(-240.0, -95.0, ease(approachT));
+      } else {
+        // Beat 6: Low-altitude lunar powered descent (0.62 -> 0.80, altitude 15.0 km -> 150 m)
+        // Scale up Moon sphere and move closer so its curved horizon fills the lower half of the viewport
+        const descentT = seg(p, 0.62, 0.80);
+        moonScale = THREE.MathUtils.lerp(2.0, 8.2, ease(descentT));
+        const moonR = 22.0 * moonScale;
+
+        // Crest of the lunar horizon stays framed directly below the descending lander and thrusters
+        const crestOffsetY = THREE.MathUtils.lerp(7.5, 4.2, descentT);
+        const horizonCrestY = this._craftState.landerWorldPos.y - crestOffsetY;
+        moonY = horizonCrestY - moonR;
+
+        // Front of lunar globe moves close behind lander flight path
+        const targetMoonZ = this._craftState.landerWorldPos.z - 10.0 - moonR * 0.12;
+        moonZ = THREE.MathUtils.lerp(-95.0, targetMoonZ, ease(descentT));
+      }
+
       this.atmosphere.approachMoon.scale.set(moonScale, moonScale, moonScale);
       this.atmosphere.approachMoon.position.set(0, moonY, moonZ);
     }
