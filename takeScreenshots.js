@@ -25,6 +25,9 @@ async function run() {
   });
 
   const page = await browser.newPage();
+  page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+  page.on('pageerror', err => console.log('PAGE ERR:', err));
+  page.on('requestfailed', req => console.log('REQ FAILED:', req.url(), req.failure()?.errorText));
   await page.setViewport({ width: 1440, height: 900 });
 
   console.log('Navigating to http://localhost:5173/?debug=1 ...');
@@ -54,6 +57,11 @@ async function run() {
   console.log('Capturing stage 2: Liftoff...');
   await scrollToProgress(0.22);
   await page.screenshot({ path: path.join(outDir, '02-rocket-liftoff.png') });
+
+  // 2b. Ascent at 69km (Beat 2: Earth sphere must be hidden)
+  console.log('Capturing stage 2b: Ascent at 69km altitude...');
+  await scrollToProgress(0.288);
+  await page.screenshot({ path: path.join(outDir, '02b-ascent-69km.png') });
 
   // 3. Stage 3: Fairing separation
   console.log('Capturing stage 3: Fairing separation...');

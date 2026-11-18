@@ -73,6 +73,7 @@ export class ThreeConductor {
   private readonly _skyColor = new THREE.Color();
   private readonly _dawnColor = new THREE.Color(0x070b14);
   private readonly _spaceColor = new THREE.Color(0x020306);
+  private readonly _earthSunDir = new THREE.Vector3();
   private readonly _domeOrbit = { yaw: 0.5, pitch: 0.38, zoom: 32.0 };
 
   constructor(canvas: HTMLCanvasElement) {
@@ -578,18 +579,43 @@ export class ThreeConductor {
     const upperThrust = seg(p, 0.35, 0.39) * (1 - seg(p, 0.53, 0.55));
     this.rocket.setUpperThrust(upperThrust);
 
-    // Receding photorealistic Earth in the distant background behind the lander (28% to 68%)
-    if (p > 0.28 && p < 0.68) {
-      this.atmosphere.distantEarth.visible = true;
-      const earthProgress = seg(p, 0.40, 0.68);
-      const earthScale = THREE.MathUtils.lerp(0.95, 0.24, ease(earthProgress));
-      const earthX = THREE.MathUtils.lerp(-18, -34, earthProgress);
-      const earthY = THREE.MathUtils.lerp(this._craftState.landerWorldPos.y - 6, this._craftState.landerWorldPos.y + 10, earthProgress);
-      const earthZ = THREE.MathUtils.lerp(-70, -260, ease(earthProgress));
+    // Receding photorealistic Blue Marble Earth in the distant background (Beats 3/4 to 5, p: 0.38 to 0.68)
+    // Strictly hidden during Launch and Ascent (Beats 0-2, p < 0.38) while booster ascends above ground horizon
+    const isEarthVisible = p >= 0.38 && p < 0.68;
+    this.atmosphere.distantEarth.visible = isEarthVisible;
+
+    if (isEarthVisible) {
+      const earthProgress = seg(p, 0.38, 0.68);
+      const earthScale = THREE.MathUtils.lerp(1.10, 0.22, ease(earthProgress));
+      const earthX = THREE.MathUtils.lerp(-16, -34, earthProgress);
+      const earthY = THREE.MathUtils.lerp(this._craftState.landerWorldPos.y - 8, this._craftState.landerWorldPos.y + 12, earthProgress);
+      const earthZ = THREE.MathUtils.lerp(-55, -260, ease(earthProgress));
       this.atmosphere.distantEarth.scale.set(earthScale, earthScale, earthScale);
       this.atmosphere.distantEarth.position.set(earthX, earthY, earthZ);
-    } else {
-      this.atmosphere.distantEarth.visible = false;
+
+      // Smooth fade-in as spacecraft climbs out of Earth orbit into deep space
+      const fadeIn = seg(p, 0.38, 0.44);
+
+      // Continuous axial rotation for Earth and atmospheric clouds (clouds drift slightly faster)
+      if (this.atmosphere.distantEarthMesh) {
+        this.atmosphere.distantEarthMesh.rotation.y = -Math.PI * 0.35 + this.simTimeSec * 0.008;
+      }
+      if (this.atmosphere.earthCloudsMesh) {
+        this.atmosphere.earthCloudsMesh.rotation.y = -Math.PI * 0.35 + this.simTimeSec * 0.012;
+      }
+
+      // Update atmospheric Fresnel halo shader uniforms with Sun direction and opacity
+      this._earthSunDir.set(45 - earthX, 50 - earthY, 35 - earthZ).normalize();
+      this.atmosphere.distantEarth.traverse(obj => {
+        if (obj instanceof THREE.Mesh && obj.material instanceof THREE.ShaderMaterial) {
+          if (obj.material.uniforms?.uSunDirection) {
+            obj.material.uniforms.uSunDirection.value.copy(this._earthSunDir);
+          }
+          if (obj.material.uniforms?.uOpacity) {
+            obj.material.uniforms.uOpacity.value = fadeIn;
+          }
+        }
+      });
     }
 
     // ----------------------------------------------------

@@ -10,6 +10,7 @@ export function applyFieldTheme(conductor: ThreeConductor): void {
         ancestor === conductor.particles.group ||
         ancestor === conductor.rocket.boosterPlume ||
         ancestor === conductor.atmosphere.approachMoon ||
+        ancestor === conductor.atmosphere.distantEarth ||
         ancestor === conductor.surface.landingTerrain ||
         ancestor === conductor.surface.domeBaseDisc ||
         ancestor === conductor.lander.engineFlame
@@ -19,6 +20,7 @@ export function applyFieldTheme(conductor: ThreeConductor): void {
       object === conductor.particles.group ||
       object === conductor.rocket.boosterPlume ||
       object === conductor.atmosphere.approachMoon ||
+      object === conductor.atmosphere.distantEarth ||
       object === conductor.surface.landingTerrain ||
       object === conductor.surface.domeBaseDisc ||
       object === conductor.lander.engineFlame
@@ -62,8 +64,5 @@ export function applyFieldTheme(conductor: ThreeConductor): void {
   (conductor.surface.horizonWallMesh.material as THREE.Material).visible = false;
   const stars = conductor.atmosphere.starfield.material as THREE.PointsMaterial;
   stars.vertexColors = false; stars.color.set('#ECE8DD'); stars.needsUpdate = true;
-  const earth = conductor.atmosphere.distantEarth.children[0] as THREE.Mesh;
-  earth.material = new THREE.MeshStandardMaterial({ color: '#5FA8D3', roughness: 1, metalness: 0 });
-  conductor.atmosphere.distantEarth.children.slice(1).forEach(child => { child.visible = false; });
   conductor.atmosphere.rimLight.color.set('#8F8B80');
 }

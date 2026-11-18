@@ -111,6 +111,10 @@ export class AtmosphereStars {
   public launchGround: THREE.Group;
   public cloudLayers: THREE.Group;
   public distantEarth: THREE.Group;
+  public distantEarthMesh!: THREE.Mesh;
+  public earthCloudsMesh!: THREE.Mesh;
+  public earthAtmoHalo!: THREE.Mesh;
+  public earthAtmoMat!: THREE.ShaderMaterial;
   public approachMoon: THREE.Group;
   public starfield: THREE.Points;
   public directionalSun: THREE.DirectionalLight;
@@ -832,28 +836,145 @@ export class AtmosphereStars {
     this.starfield = new THREE.Points(starGeo, starMat);
     this.group.add(this.starfield);
 
-    // 5. Textured Distant Earth (Seen from ascent & translunar space)
+    // 5. High-Resolution Photorealistic NASA Blue Marble Earth with Dynamic Clouds & Fresnel Rim Glow
     this.distantEarth = new THREE.Group();
-    const dEarthGeo = new THREE.SphereGeometry(16, 48, 48);
+    this.distantEarth.name = 'DistantEarth';
+
+    // 5a. Base Earth Planetary Sphere (Radius 16.0, 64 segments)
+    const dEarthGeo = new THREE.SphereGeometry(16, 64, 64);
     const earthTex = CelestialTextures.getEarthTexture();
+    const earthNormal = CelestialTextures.getEarthNormalMap();
+    const earthRoughness = CelestialTextures.getEarthRoughnessMap();
     const dEarthMat = new THREE.MeshStandardMaterial({
       map: earthTex,
-      roughness: 0.55,
-      metalness: 0.1
+      normalMap: earthNormal,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      roughnessMap: earthRoughness,
+      roughness: 0.65,
+      metalness: 0.05,
+      flatShading: false
     });
-    const dEarthMesh = new THREE.Mesh(dEarthGeo, dEarthMat);
-    dEarthMesh.rotation.y = -Math.PI * 0.35;
-    this.distantEarth.add(dEarthMesh);
+    this.distantEarthMesh = new THREE.Mesh(dEarthGeo, dEarthMat);
+    this.distantEarthMesh.name = 'EarthSurface';
+    this.distantEarthMesh.rotation.y = -Math.PI * 0.35;
+    this.distantEarthMesh.castShadow = true;
+    this.distantEarthMesh.receiveShadow = true;
+    this.distantEarth.add(this.distantEarthMesh);
 
-    // Blue atmospheric scattering halo
-    const dAtmoGeo = new THREE.SphereGeometry(16.6, 48, 48);
-    const dAtmoMat = new THREE.MeshBasicMaterial({
-      color: 0x7dd3fc,
+    // 5b. Independent Dynamic Cloud Layer (Radius 16.20, 64 segments)
+    const cloudsGeo = new THREE.SphereGeometry(16.20, 64, 64);
+    const cloudsTex = CelestialTextures.getEarthCloudsTexture();
+    const cloudsMat = new THREE.MeshStandardMaterial({
+      map: cloudsTex,
       transparent: true,
-      opacity: 0.32,
-      side: THREE.BackSide
+      opacity: 0.72,
+      blending: THREE.NormalBlending,
+      depthWrite: false,
+      roughness: 0.95,
+      metalness: 0.0,
+      flatShading: false
     });
-    this.distantEarth.add(new THREE.Mesh(dAtmoGeo, dAtmoMat));
+    this.earthCloudsMesh = new THREE.Mesh(cloudsGeo, cloudsMat);
+    this.earthCloudsMesh.name = 'EarthClouds';
+    this.earthCloudsMesh.rotation.y = -Math.PI * 0.35;
+    this.distantEarth.add(this.earthCloudsMesh);
+
+    // 5c. Photorealistic Atmospheric Fresnel Rim Glow with Directional Sunlight Terminator
+    // Outer atmospheric scattering shell extending into space
+    const atmoGeo = new THREE.SphereGeometry(16.48, 64, 64);
+    this.earthAtmoMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSunDirection: { value: new THREE.Vector3(0.5, 0.6, 0.4).normalize() },
+        uAtmosphereColor: { value: new THREE.Color(0x4da6ff) },
+        uOpacity: { value: 1.0 }
+      },
+      vertexShader: `
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
+        void main() {
+          vWorldNormal = normalize(mat3(modelMatrix) * normal);
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uSunDirection;
+        uniform vec3 uAtmosphereColor;
+        uniform float uOpacity;
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
+        void main() {
+          vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+          vec3 norm = normalize(vWorldNormal);
+          // With BackSide, silhouette rim is where viewDir is perpendicular to normal:
+          float rim = 1.0 - abs(dot(viewDir, norm));
+          float halo = pow(rim, 3.8) * 1.5;
+
+          // Sharp directional sunlight shadow across the terminator:
+          // vWorldNormal in world space points towards Sun on the illuminated day limb:
+          float sunDot = dot(norm, normalize(uSunDirection));
+          float sunScatter = smoothstep(-0.15, 0.35, sunDot);
+
+          float alpha = halo * sunScatter * uOpacity * 0.85;
+          gl_FragColor = vec4(uAtmosphereColor, alpha);
+        }
+      `,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+      transparent: true,
+      depthWrite: false
+    });
+    this.earthAtmoHalo = new THREE.Mesh(atmoGeo, this.earthAtmoMat);
+    this.earthAtmoHalo.name = 'EarthAtmosphereHalo';
+    this.distantEarth.add(this.earthAtmoHalo);
+
+    // 5d. Inner Rayleigh Atmospheric Limb Haze hugging the planet horizon
+    const innerHazeGeo = new THREE.SphereGeometry(16.08, 64, 64);
+    const innerHazeMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSunDirection: { value: new THREE.Vector3(0.5, 0.6, 0.4).normalize() },
+        uAtmosphereColor: { value: new THREE.Color(0x4da6ff) },
+        uOpacity: { value: 1.0 }
+      },
+      vertexShader: `
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
+        void main() {
+          vWorldNormal = normalize(mat3(modelMatrix) * normal);
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uSunDirection;
+        uniform vec3 uAtmosphereColor;
+        uniform float uOpacity;
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
+        void main() {
+          vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+          vec3 norm = normalize(vWorldNormal);
+          float rim = 1.0 - max(dot(viewDir, norm), 0.0);
+          float haze = pow(rim, 3.2) * 1.1;
+
+          float sunDot = dot(norm, normalize(uSunDirection));
+          float sunScatter = smoothstep(-0.10, 0.35, sunDot);
+
+          float alpha = haze * sunScatter * uOpacity * 0.65;
+          gl_FragColor = vec4(uAtmosphereColor, alpha);
+        }
+      `,
+      blending: THREE.AdditiveBlending,
+      side: THREE.FrontSide,
+      transparent: true,
+      depthWrite: false
+    });
+    const innerHazeMesh = new THREE.Mesh(innerHazeGeo, innerHazeMat);
+    innerHazeMesh.name = 'EarthAtmosphereInnerHaze';
+    this.distantEarth.add(innerHazeMesh);
+
     this.distantEarth.position.set(-30, -50, -20);
     this.distantEarth.visible = false;
     this.group.add(this.distantEarth);

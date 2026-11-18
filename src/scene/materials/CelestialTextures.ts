@@ -27,14 +27,19 @@ export class DeterministicPRNG {
  */
 export class CelestialTextures {
   private static earthTexture: THREE.Texture | null = null;
+  private static earthNormalMap: THREE.Texture | null = null;
+  private static earthSpecularMap: THREE.Texture | null = null;
+  private static earthRoughnessMap: THREE.Texture | null = null;
+  private static earthCloudsTexture: THREE.Texture | null = null;
   private static moonTexture: THREE.Texture | null = null;
   private static moonNormalMap: THREE.Texture | null = null;
   private static moonBumpMap: THREE.Texture | null = null;
 
-  public static getEarthTexture(): THREE.Texture {
-    if (this.earthTexture) return this.earthTexture;
-    if (typeof document === 'undefined') return new THREE.Texture();
-
+  /**
+   * Generates a high-detail procedural Blue Marble texture for Earth on canvas
+   * Used as instantaneous initial texture and resilient offline fallback.
+   */
+  public static createProceduralEarthCanvas(): HTMLCanvasElement {
     const w = 1024;
     const h = 512;
     const canvas = document.createElement('canvas');
@@ -52,29 +57,35 @@ export class CelestialTextures {
     ctx.fillStyle = oceanGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // 2. Continental Landmasses (Stylized continental plates)
+    // 2. Continental Landmasses
     ctx.fillStyle = '#22543d'; // Rich forest green / terrain
 
-    // Americas
-    ctx.beginPath();
     // North America
+    ctx.beginPath();
     ctx.ellipse(w * 0.22, h * 0.32, w * 0.11, h * 0.16, -0.2, 0, Math.PI * 2);
     ctx.fill();
-    // South America
+
+    // Central & South America
     ctx.beginPath();
     ctx.ellipse(w * 0.30, h * 0.65, w * 0.07, h * 0.18, 0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Eurasia & Africa
+    // Eurasia
     ctx.fillStyle = '#2d6a4f';
     ctx.beginPath();
-    // Europe & Asia
     ctx.ellipse(w * 0.68, h * 0.30, w * 0.20, h * 0.16, 0.1, 0, Math.PI * 2);
     ctx.fill();
+
     // Africa (warm savanna tint)
     ctx.fillStyle = '#744210';
     ctx.beginPath();
     ctx.ellipse(w * 0.55, h * 0.55, w * 0.09, h * 0.18, 0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // India subcontinent
+    ctx.fillStyle = '#386641';
+    ctx.beginPath();
+    ctx.ellipse(w * 0.72, h * 0.44, w * 0.04, h * 0.06, 0.15, 0, Math.PI * 2);
     ctx.fill();
 
     // Australia
@@ -94,23 +105,223 @@ export class CelestialTextures {
     ctx.ellipse(w * 0.5, h, w * 0.48, h * 0.11, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 4. Swirled Atmospheric Cloud Systems
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-    for (let c = 0; c < 24; c++) {
-      const cx = (c / 24) * w + (Math.sin(c) * 40);
-      const cy = h * 0.25 + Math.cos(c * 1.5) * (h * 0.35);
+    return canvas;
+  }
+
+  /**
+   * Generates procedural semi-transparent cloud systems on canvas
+   */
+  public static createProceduralCloudsCanvas(): HTMLCanvasElement {
+    const w = 1024;
+    const h = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, w, h);
+
+    // Swirled Atmospheric Cloud Systems
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    for (let c = 0; c < 36; c++) {
+      const cx = (c / 36) * w + (Math.sin(c * 1.3) * 50);
+      const cy = h * 0.22 + Math.cos(c * 1.7) * (h * 0.38);
       ctx.beginPath();
-      ctx.ellipse(cx % w, cy, w * 0.06, h * 0.025, Math.sin(c) * 0.4, 0, Math.PI * 2);
+      ctx.ellipse(cx % w, cy, w * 0.065, h * 0.028, Math.sin(c) * 0.45, 0, Math.PI * 2);
       ctx.fill();
     }
     // Equatorial intertropical convergence cloud band
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
-    ctx.fillRect(0, h * 0.48, w, h * 0.035);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.fillRect(0, h * 0.47, w, h * 0.04);
+
+    return canvas;
+  }
+
+  /**
+   * Loads high-resolution NASA Blue Marble equirectangular Earth texture (earth_atmos_2048.jpg).
+   * Uses local asset with CDN fallback and procedural canvas fallback.
+   */
+  public static getEarthTexture(): THREE.Texture {
+    if (this.earthTexture) return this.earthTexture;
+    if (typeof document === 'undefined') return new THREE.Texture();
+
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    const texture = loader.load(
+      '/textures/earth/earth_atmos_2048.jpg',
+      (loaded) => {
+        loaded.colorSpace = THREE.SRGBColorSpace;
+        loaded.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        // Fallback to jsdelivr CDN if local asset fails
+        loader.load(
+          'https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/planets/earth_atmos_2048.jpg',
+          (fallbackTex) => {
+            texture.image = fallbackTex.image;
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.needsUpdate = true;
+          },
+          undefined,
+          () => {
+            // Procedural fallback if offline
+            texture.image = CelestialTextures.createProceduralEarthCanvas();
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.needsUpdate = true;
+          }
+        );
+      }
+    );
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    this.earthTexture = texture;
+    return texture;
+  }
+
+  /**
+   * Loads NASA Earth topographic normal map (earth_normal_2048.jpg)
+   */
+  public static getEarthNormalMap(): THREE.Texture {
+    if (this.earthNormalMap) return this.earthNormalMap;
+    if (typeof document === 'undefined') return new THREE.Texture();
+
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    const texture = loader.load(
+      '/textures/earth/earth_normal_2048.jpg',
+      (loaded) => {
+        loaded.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        loader.load(
+          'https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/planets/earth_normal_2048.jpg',
+          (fallbackTex) => {
+            texture.image = fallbackTex.image;
+            texture.needsUpdate = true;
+          }
+        );
+      }
+    );
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    this.earthNormalMap = texture;
+    return texture;
+  }
+
+  /**
+   * Loads NASA Earth ocean specular reflection map (earth_specular_2048.jpg)
+   */
+  public static getEarthSpecularMap(): THREE.Texture {
+    if (this.earthSpecularMap) return this.earthSpecularMap;
+    if (typeof document === 'undefined') return new THREE.Texture();
+
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    const texture = loader.load(
+      '/textures/earth/earth_specular_2048.jpg',
+      (loaded) => {
+        loaded.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        loader.load(
+          'https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/planets/earth_specular_2048.jpg',
+          (fallbackTex) => {
+            texture.image = fallbackTex.image;
+            texture.needsUpdate = true;
+          }
+        );
+      }
+    );
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    this.earthSpecularMap = texture;
+    return texture;
+  }
+
+  /**
+   * Generates inverted PBR roughness map from specular map:
+   * Oceans (specular white) become smooth water (low roughness ~0.14)
+   * Continents (specular black) become matte land (high roughness ~0.88)
+   */
+  public static getEarthRoughnessMap(): THREE.Texture {
+    if (this.earthRoughnessMap) return this.earthRoughnessMap;
+    if (typeof document === 'undefined') return new THREE.Texture();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#aaaaaa';
+    ctx.fillRect(0, 0, 1024, 512);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
-    this.earthTexture = texture;
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        const idata = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = idata.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const spec = d[i];
+          const r = Math.round(225 - spec * (190 / 255));
+          d[i] = r;
+          d[i + 1] = r;
+          d[i + 2] = r;
+        }
+        ctx.putImageData(idata, 0, 0);
+        texture.needsUpdate = true;
+      } catch {
+        // Safe CORS fallback
+      }
+    };
+    img.src = '/textures/earth/earth_specular_2048.jpg';
+
+    this.earthRoughnessMap = texture;
+    return texture;
+  }
+
+  /**
+   * Loads high-resolution transparent Earth cloud systems texture (earth_clouds_1024.png)
+   */
+  public static getEarthCloudsTexture(): THREE.Texture {
+    if (this.earthCloudsTexture) return this.earthCloudsTexture;
+    if (typeof document === 'undefined') return new THREE.Texture();
+
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin('anonymous');
+    const texture = loader.load(
+      '/textures/earth/earth_clouds_1024.png',
+      (loaded) => {
+        loaded.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        loader.load(
+          'https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/planets/earth_clouds_1024.png',
+          (fallbackTex) => {
+            texture.image = fallbackTex.image;
+            texture.needsUpdate = true;
+          },
+          undefined,
+          () => {
+            texture.image = CelestialTextures.createProceduralCloudsCanvas();
+            texture.needsUpdate = true;
+          }
+        );
+      }
+    );
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    this.earthCloudsTexture = texture;
     return texture;
   }
 
