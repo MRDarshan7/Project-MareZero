@@ -71,8 +71,8 @@ export class ThreeConductor {
   private readonly _craftWorldQuat = new THREE.Quaternion();
   private readonly _sunDir = new THREE.Vector3();
   private readonly _skyColor = new THREE.Color();
-  private readonly _dawnColor = new THREE.Color(0x0c0d0b);
-  private readonly _spaceColor = new THREE.Color(0x0c0d0b);
+  private readonly _dawnColor = new THREE.Color(0x070b14);
+  private readonly _spaceColor = new THREE.Color(0x020306);
   private readonly _domeOrbit = { yaw: 0.5, pitch: 0.38, zoom: 32.0 };
 
   constructor(canvas: HTMLCanvasElement) {
@@ -101,7 +101,7 @@ export class ThreeConductor {
 
     // Scene & Camera
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0c0d0b);
+    this.scene.background = new THREE.Color(0x070b14);
 
     this.camera = new THREE.PerspectiveCamera(46, this.width / (this.height || 1), 0.1, 1500);
     this.camera.position.set(0, 5, 24);
@@ -469,8 +469,10 @@ export class ThreeConductor {
     this._skyColor.copy(this._dawnColor).lerp(this._spaceColor, atmoMix);
     this.scene.background = this._skyColor;
 
-    // Stars: fade in as atmosphere fades (18% - 40%), stay visible in space
-    const starsOpacity = seg(p, 0.18, 0.40) * (1 - seg(p, 0.88, 0.98) * 0.3);
+    // Stars: visible at Beat 0 night launch (#070b14 fading into a faint starfield), staying crisp in space
+    const nightStars = 0.38 * (1 - seg(p, 0.06, 0.16));
+    const spaceStars = seg(p, 0.18, 0.40) * (1 - seg(p, 0.88, 0.98) * 0.3);
+    const starsOpacity = Math.max(nightStars, spaceStars);
     (this.atmosphere.starfield.material as THREE.PointsMaterial).opacity = starsOpacity;
 
     // Hard vacuum lighting transition (harsh contrast, near-zero ambient, pure solar key)
@@ -530,8 +532,8 @@ export class ThreeConductor {
     // Deterministic staging separations (booster, fairings, upper stage)
     this.rocket.updateSeparations(p, this._craftWorldPos, this._craftWorldQuat);
 
-    // Animate launch pad (swing arm, clamps, vapor venting, ignition light)
-    this.atmosphere.updatePad(p);
+    // Animate launch pad (swing arms, clamps, vapor venting, floodlights, ignition light)
+    this.atmosphere.updatePad(p, this.simTimeSec);
 
     // Launch ground pad & gantry tower recede below during ascent
     const padDrop = ease(seg(p, 0.08, 0.35)) * 50;

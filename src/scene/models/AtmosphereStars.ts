@@ -1,6 +1,111 @@
 import * as THREE from 'three';
 import { CelestialTextures } from '../materials/CelestialTextures';
 
+interface FloodlightAssembly {
+  light: THREE.SpotLight;
+  beamMesh: THREE.Mesh;
+  baseIntensity: number;
+  baseBeamOpacity: number;
+}
+
+/**
+ * Creates soft, anti-aliased billboarded radial gradient texture
+ * for realistic cryogenic liquid oxygen boil-off vapor.
+ */
+function createVaporTexture(): THREE.Texture {
+  if (typeof document === 'undefined') return new THREE.Texture();
+  try {
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return new THREE.Texture();
+
+    const half = size / 2;
+    const grad = ctx.createRadialGradient(half, half, 0, half, half, half);
+    grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+    grad.addColorStop(0.18, 'rgba(255, 255, 255, 0.95)');
+    grad.addColorStop(0.42, 'rgba(240, 248, 255, 0.65)');
+    grad.addColorStop(0.72, 'rgba(220, 238, 255, 0.22)');
+    grad.addColorStop(1.0, 'rgba(210, 230, 250, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  } catch {
+    return new THREE.Texture();
+  }
+}
+
+/**
+ * Creates vertical atmospheric horizon gradient for night launchpad
+ * (#070b14 deep indigo fading into night sky).
+ */
+function createHorizonTexture(): THREE.Texture {
+  if (typeof document === 'undefined') return new THREE.Texture();
+  try {
+    const w = 128;
+    const h = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return new THREE.Texture();
+
+    const grad = ctx.createLinearGradient(0, h, 0, 0);
+    grad.addColorStop(0.0, '#04070e');
+    grad.addColorStop(0.12, '#070b14');
+    grad.addColorStop(0.32, '#0c152a');
+    grad.addColorStop(0.60, '#070b14');
+    grad.addColorStop(1.0, 'rgba(7, 11, 20, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.repeat.set(4, 1);
+    tex.needsUpdate = true;
+    return tex;
+  } catch {
+    return new THREE.Texture();
+  }
+}
+
+/**
+ * Helper to build an oriented volumetric cone beam between light source and target
+ */
+function createBeamCone(
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  radiusFrom: number,
+  radiusTo: number,
+  colorHex: number,
+  opacity: number
+): { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial } {
+  const dir = new THREE.Vector3().subVectors(to, from);
+  const len = dir.length();
+  const geo = new THREE.CylinderGeometry(radiusTo, radiusFrom, len, 16, 1, true);
+
+  const mat = new THREE.MeshBasicMaterial({
+    color: colorHex,
+    transparent: true,
+    opacity: opacity,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  const mid = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5);
+  mesh.position.copy(mid);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+  return { mesh, mat };
+}
+
 export class AtmosphereStars {
   public group: THREE.Group;
   public launchGround: THREE.Group;
@@ -15,10 +120,18 @@ export class AtmosphereStars {
 
   // Launch pad interactive elements
   public swingArm: THREE.Group;
+  public boosterSwingArm: THREE.Group;
   public holdDownClamps: THREE.Group[] = [];
   public ignitionLight: THREE.PointLight;
   public vaporPoints: THREE.Points;
   private vaporPositions: Float32Array;
+  private vaporCount = 120;
+  private vaporMat: THREE.PointsMaterial;
+
+  // Night launch enhancements
+  public floodlights: FloodlightAssembly[] = [];
+  public beaconMaterials: THREE.MeshBasicMaterial[] = [];
+  public horizonGlow: THREE.Mesh;
 
   constructor() {
     this.group = new THREE.Group();
@@ -60,9 +173,9 @@ export class AtmosphereStars {
     // Massive Horizon Ground Plane (Extends to visible distance R = 400)
     const groundGeo = new THREE.PlaneGeometry(800, 800, 32, 32);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x1a2130, // Coastal Florida marshland / dark soil
+      color: 0x121824, // Coastal Cape Canaveral marshland / night soil
       roughness: 0.95,
-      metalness: 0.1
+      metalness: 0.08
     });
     const groundMesh = new THREE.Mesh(groundGeo, groundMat);
     groundMesh.rotation.x = -Math.PI / 2;
@@ -70,81 +183,253 @@ export class AtmosphereStars {
     groundMesh.receiveShadow = true;
     this.launchGround.add(groundMesh);
 
-    // Concrete Launch Pad Mount
-    const padMountGeo = new THREE.CylinderGeometry(28, 32, 2.2, 48);
+    // Subtle Deep-Indigo Atmospheric Horizon Glow Cylinder (#070b14 fading into faint starfield)
+    const horizonGeo = new THREE.CylinderGeometry(380, 380, 160, 32, 1, true);
+    const horizonMat = new THREE.MeshBasicMaterial({
+      map: createHorizonTexture(),
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false
+    });
+    this.horizonGlow = new THREE.Mesh(horizonGeo, horizonMat);
+    this.horizonGlow.position.set(3.5, 45, 0);
+    this.launchGround.add(this.horizonGlow);
+
+    // ----------------------------------------------------
+    // Raised Concrete Mobile Launcher Platform (MLP) & Pedestal
+    // ----------------------------------------------------
     const concreteMat = new THREE.MeshStandardMaterial({
-      color: 0x475569, // Concrete gray
-      roughness: 0.88,
-      metalness: 0.15
+      color: 0x3e4551, // Weathered reinforced concrete
+      roughness: 0.90,
+      metalness: 0.12
     });
-    const padMount = new THREE.Mesh(padMountGeo, concreteMat);
-    padMount.position.set(3.5, -0.9, 0);
-    padMount.receiveShadow = true;
-    this.launchGround.add(padMount);
-
-    // Flame Trench cutout beneath rocket engine cluster
-    const trenchGeo = new THREE.BoxGeometry(6.5, 3.5, 18);
-    const trenchMat = new THREE.MeshStandardMaterial({
-      color: 0x11141a, // Scorched refractory brick
-      roughness: 0.95,
-      metalness: 0.05
-    });
-    const trench = new THREE.Mesh(trenchGeo, trenchMat);
-    trench.position.set(3.5, -1.8, 0);
-    this.launchGround.add(trench);
-
-    // ----------------------------------------------------
-    // Open Steel Lattice Launch Tower
-    // ----------------------------------------------------
-    const towerGroup = new THREE.Group();
-    // Positioned left of pad mount at x = -4.5, z = -3.5 (clear of left-aligned text)
-    towerGroup.position.set(-4.5, 0, -3.5);
-
     const steelMat = new THREE.MeshStandardMaterial({
-      color: 0x64748b, // Industrial steel gray
+      color: 0x64748b, // Industrial structural steel
       roughness: 0.45,
       metalness: 0.8
     });
+    const railingMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b, // Safety yellow industrial railings
+      roughness: 0.40,
+      metalness: 0.70
+    });
+
+    const mlpGroup = new THREE.Group();
+    mlpGroup.position.set(3.5, 0, 0);
+
+    // Heavy Octagonal Concrete Pedestal Foundation (Top at Y=0, Base at Y=-2.2)
+    const octGeo = new THREE.CylinderGeometry(14.0, 15.2, 2.2, 8);
+    const octPad = new THREE.Mesh(octGeo, concreteMat);
+    octPad.position.y = -1.1;
+    octPad.rotation.y = Math.PI / 8; // align flat faces with X/Z axes
+    octPad.receiveShadow = true;
+    mlpGroup.add(octPad);
+
+    // Elevated Center Thrust Mounting Ring Collar right below rocket core
+    const thrustRingGeo = new THREE.CylinderGeometry(2.6, 2.9, 0.4, 32);
+    const thrustRing = new THREE.Mesh(thrustRingGeo, steelMat);
+    thrustRing.position.y = 0.2;
+    thrustRing.receiveShadow = true;
+    mlpGroup.add(thrustRing);
+
+    // Equipment Enclosures on MLP Deck Corners
+    const eqBoxGeo = new THREE.BoxGeometry(2.8, 1.4, 2.4);
+    const eqCoords = [
+      [7.5, 0.7, 7.5],
+      [-7.5, 0.7, 7.5],
+      [7.5, 0.7, -7.5],
+      [-7.5, 0.7, -7.5]
+    ];
+    for (const [ex, ey, ez] of eqCoords) {
+      const eqBox = new THREE.Mesh(eqBoxGeo, steelMat);
+      eqBox.position.set(ex, ey, ez);
+      mlpGroup.add(eqBox);
+
+      // High-pressure gaseous purge storage sphere
+      const tankGeo = new THREE.SphereGeometry(0.7, 12, 12);
+      const tank = new THREE.Mesh(tankGeo, concreteMat);
+      tank.position.set(ex, ey + 1.2, ez);
+      mlpGroup.add(tank);
+    }
+
+    // Perimeter Safety Railings along the Raised Pedestal Edge
+    const railRadius = 11.2;
+    const railPosts = 24;
+    const postGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.9, 6);
+    const topRailGeo = new THREE.TorusGeometry(railRadius, 0.028, 6, 32);
+    const midRailGeo = new THREE.TorusGeometry(railRadius, 0.022, 6, 32);
+
+    for (let r = 0; r < railPosts; r++) {
+      const angle = (r / railPosts) * Math.PI * 2;
+      // Skip opening for flame trench exits along Z
+      if (Math.abs(Math.sin(angle)) > 0.88) continue;
+      const post = new THREE.Mesh(postGeo, railingMat);
+      post.position.set(Math.cos(angle) * railRadius, 0.45, Math.sin(angle) * railRadius);
+      mlpGroup.add(post);
+    }
+
+    const topRail = new THREE.Mesh(topRailGeo, railingMat);
+    topRail.rotation.x = Math.PI / 2;
+    topRail.position.y = 0.9;
+    mlpGroup.add(topRail);
+
+    const midRail = new THREE.Mesh(midRailGeo, railingMat);
+    midRail.rotation.x = Math.PI / 2;
+    midRail.position.y = 0.45;
+    mlpGroup.add(midRail);
+
+    // Central Flame Trench Cutout Beneath Rocket Base (Recessed to Y = -3.8)
+    const trenchMat = new THREE.MeshStandardMaterial({
+      color: 0x14171d, // Scorched refractory ceramic & soot
+      roughness: 0.95,
+      metalness: 0.1
+    });
+    const trenchGeo = new THREE.BoxGeometry(5.8, 3.8, 18.0);
+    const trench = new THREE.Mesh(trenchGeo, trenchMat);
+    trench.position.set(0, -1.9, 0);
+    mlpGroup.add(trench);
+
+    // Double-Sided V-Wedge Steel Flame Deflector inside the trench
+    const deflectorMat = new THREE.MeshStandardMaterial({
+      color: 0x1e232b, // Scorched heat deflector steel
+      metalness: 0.70,
+      roughness: 0.65
+    });
+    const deflectorGeo = new THREE.ConeGeometry(2.4, 4.0, 4);
+    deflectorGeo.scale(1.2, 0.8, 3.2);
+    const deflector = new THREE.Mesh(deflectorGeo, deflectorMat);
+    deflector.position.set(0, -2.4, 0);
+    deflector.rotation.y = Math.PI / 4;
+    mlpGroup.add(deflector);
+
+    // Water Deluge Blast Pipes along trench lip
+    const delugeMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.5, metalness: 0.6 });
+    for (const sx of [-2.9, 2.9]) {
+      const delugePipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 17.5, 8), delugeMat);
+      delugePipe.rotation.x = Math.PI / 2;
+      delugePipe.position.set(sx, 0.1, 0);
+      mlpGroup.add(delugePipe);
+    }
+
+    this.launchGround.add(mlpGroup);
+
+    // ----------------------------------------------------
+    // Four Tall Lightning Protection Masts around Pad Corners
+    // ----------------------------------------------------
+    const mastCoords: Array<[number, number]> = [
+      [3.5 - 13.5, 12.0],  // Front-Left (-10.0, 12.0)
+      [3.5 + 13.5, 12.0],  // Front-Right (17.0, 12.0)
+      [3.5 - 13.5, -12.0], // Rear-Left (-10.0, -12.0)
+      [3.5 + 13.5, -12.0]  // Rear-Right (17.0, -12.0)
+    ];
+
+    const mastH = 38.0;
+    const mastPylonGeo = new THREE.CylinderGeometry(0.12, 0.52, mastH, 8);
+    const spireGeo = new THREE.CylinderGeometry(0.02, 0.08, 3.2, 6);
+    const beaconGeo = new THREE.SphereGeometry(0.22, 8, 8);
+
+    for (let m = 0; m < mastCoords.length; m++) {
+      const [mx, mz] = mastCoords[m];
+      const mastGroup = new THREE.Group();
+      mastGroup.position.set(mx, 0, mz);
+
+      // Heavy Concrete Base Pier
+      const pier = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.6, 0.8, 8), concreteMat);
+      pier.position.y = -1.6;
+      mastGroup.add(pier);
+
+      // Main Steel Lattice Tapered Pylon
+      const pylon = new THREE.Mesh(mastPylonGeo, steelMat);
+      pylon.position.y = mastH / 2 - 2.0; // from Y=-2 up to Y=36
+      mastGroup.add(pylon);
+
+      // Intermediate Service Platforms
+      for (const py of [10.0, 22.0]) {
+        const plat = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.15, 8), steelMat);
+        plat.position.y = py;
+        mastGroup.add(plat);
+      }
+
+      // Top Lightning Arrestor Needle Spire
+      const spire = new THREE.Mesh(spireGeo, steelMat);
+      spire.position.y = mastH - 2.0 + 1.6;
+      mastGroup.add(spire);
+
+      // Tiny Red Aviation Warning Beacon at Mast Apex
+      const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff1122 });
+      this.beaconMaterials.push(beaconMat);
+      const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+      beacon.position.y = mastH - 2.0 + 3.2;
+      mastGroup.add(beacon);
+
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: 0xff2233,
+        transparent: true,
+        opacity: 0.65,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+      });
+      const halo = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.75), haloMat);
+      halo.position.copy(beacon.position);
+      mastGroup.add(halo);
+
+      // Subtle localized warning beacon glow for the front masts
+      if (mz > 0) {
+        const beaconLight = new THREE.PointLight(0xff1122, 1.2, 12, 1.8);
+        beaconLight.position.copy(beacon.position);
+        mastGroup.add(beaconLight);
+      }
+
+      this.launchGround.add(mastGroup);
+    }
+
+    // ----------------------------------------------------
+    // Open Steel Lattice Launch Umbilical Tower (Detailed)
+    // ----------------------------------------------------
+    const towerGroup = new THREE.Group();
+    towerGroup.position.set(-4.5, 0, -3.5);
+
     const trussMat = new THREE.MeshStandardMaterial({
       color: 0x475569,
-      roughness: 0.5,
+      roughness: 0.50,
       metalness: 0.75
     });
 
-    const towerH = 34.0;
-    const towerW = 3.2;
+    const towerH = 35.0;
+    const towerW = 3.4;
 
     // 4 Vertical Corner Steel Columns (Legs)
-    const legGeo = new THREE.BoxGeometry(0.35, towerH, 0.35);
-    const offsets = [
+    const legGeo = new THREE.BoxGeometry(0.36, towerH, 0.36);
+    const legOffsets = [
       [-towerW / 2, -towerW / 2],
       [towerW / 2, -towerW / 2],
       [-towerW / 2, towerW / 2],
       [towerW / 2, towerW / 2]
     ];
-    for (const [ox, oz] of offsets) {
+    for (const [ox, oz] of legOffsets) {
       const leg = new THREE.Mesh(legGeo, steelMat);
       leg.position.set(ox, towerH / 2, oz);
       towerGroup.add(leg);
     }
 
-    // Horizontal & Diagonal Cross-Trusses across tower sections
-    const floors = 8;
+    // 10 Structural Bays with Horizontal Perimeter Girders & Full X-Brace Trusses
+    const floors = 10;
+    const hBeamGeoX = new THREE.BoxGeometry(towerW, 0.16, 0.16);
+    const hBeamGeoZ = new THREE.BoxGeometry(0.16, 0.16, towerW);
+
     for (let f = 0; f <= floors; f++) {
       const fy = (f / floors) * towerH;
 
-      // Platform floor plate (every 2nd level)
+      // Platform Floor Deck (every 2nd level)
       if (f % 2 === 0 && f > 0) {
-        const platGeo = new THREE.BoxGeometry(towerW + 0.6, 0.15, towerW + 0.6);
+        const platGeo = new THREE.BoxGeometry(towerW + 0.6, 0.12, towerW + 0.6);
         const plat = new THREE.Mesh(platGeo, steelMat);
         plat.position.set(0, fy, 0);
         towerGroup.add(plat);
       }
 
-      // Perimeter horizontal box girders
-      const hBeamGeoX = new THREE.BoxGeometry(towerW, 0.18, 0.18);
-      const hBeamGeoZ = new THREE.BoxGeometry(0.18, 0.18, towerW);
-
+      // Perimeter horizontal box girders (North, South, East, West)
       const bNorth = new THREE.Mesh(hBeamGeoX, trussMat);
       bNorth.position.set(0, fy, -towerW / 2);
       towerGroup.add(bNorth);
@@ -161,52 +446,169 @@ export class AtmosphereStars {
       bEast.position.set(towerW / 2, fy, 0);
       towerGroup.add(bEast);
 
-      // Diagonal X-bracing truss between floors
+      // Diagonal X-brace truss struts across each bay on ALL 4 faces
       if (f < floors) {
         const segH = towerH / floors;
         const diagLen = Math.hypot(towerW, segH);
         const diagAngle = Math.atan2(segH, towerW);
-        const diagGeo = new THREE.CylinderGeometry(0.04, 0.04, diagLen, 6);
+        const diagGeo = new THREE.CylinderGeometry(0.035, 0.035, diagLen, 6);
 
-        // East face diagonal facing rocket
-        const d1 = new THREE.Mesh(diagGeo, trussMat);
-        d1.position.set(towerW / 2, fy + segH / 2, 0);
-        d1.rotation.x = diagAngle;
-        towerGroup.add(d1);
+        // East Face (facing rocket)
+        const dE1 = new THREE.Mesh(diagGeo, trussMat);
+        dE1.position.set(towerW / 2, fy + segH / 2, 0);
+        dE1.rotation.x = diagAngle;
+        towerGroup.add(dE1);
 
-        const d2 = new THREE.Mesh(diagGeo, trussMat);
-        d2.position.set(towerW / 2, fy + segH / 2, 0);
-        d2.rotation.x = -diagAngle;
-        towerGroup.add(d2);
+        const dE2 = new THREE.Mesh(diagGeo, trussMat);
+        dE2.position.set(towerW / 2, fy + segH / 2, 0);
+        dE2.rotation.x = -diagAngle;
+        towerGroup.add(dE2);
+
+        // West Face (back)
+        const dW1 = new THREE.Mesh(diagGeo, trussMat);
+        dW1.position.set(-towerW / 2, fy + segH / 2, 0);
+        dW1.rotation.x = diagAngle;
+        towerGroup.add(dW1);
+
+        const dW2 = new THREE.Mesh(diagGeo, trussMat);
+        dW2.position.set(-towerW / 2, fy + segH / 2, 0);
+        dW2.rotation.x = -diagAngle;
+        towerGroup.add(dW2);
+
+        // North Face
+        const dN1 = new THREE.Mesh(diagGeo, trussMat);
+        dN1.position.set(0, fy + segH / 2, -towerW / 2);
+        dN1.rotation.z = diagAngle;
+        towerGroup.add(dN1);
+
+        const dN2 = new THREE.Mesh(diagGeo, trussMat);
+        dN2.position.set(0, fy + segH / 2, -towerW / 2);
+        dN2.rotation.z = -diagAngle;
+        towerGroup.add(dN2);
+
+        // South Face
+        const dS1 = new THREE.Mesh(diagGeo, trussMat);
+        dS1.position.set(0, fy + segH / 2, towerW / 2);
+        dS1.rotation.z = diagAngle;
+        towerGroup.add(dS1);
+
+        const dS2 = new THREE.Mesh(diagGeo, trussMat);
+        dS2.position.set(0, fy + segH / 2, towerW / 2);
+        dS2.rotation.z = -diagAngle;
+        towerGroup.add(dS2);
       }
     }
 
-    // Top Lightning Mast extending above rocket nose to Y = 39
+    // Vertical Propellant Pipes along Tower Spine (LOX, Fuel, Gaseous Purge)
+    const loxPipeMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.35, metalness: 0.25 });
+    const fuelPipeMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.40, metalness: 0.70 });
+    const purgePipeMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.30, metalness: 0.85 });
+
+    // Pipe 1: Insulated LOX Line (White, Y=0 to 28)
+    const loxPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 28.0, 10), loxPipeMat);
+    loxPipe.position.set(-towerW / 2 + 0.3, 14.0, -towerW / 2 - 0.22);
+    towerGroup.add(loxPipe);
+
+    // Pipe 2: Fuel Line (Slate Steel, Y=0 to 22)
+    const fuelPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 22.0, 10), fuelPipeMat);
+    fuelPipe.position.set(-towerW / 2 + 0.3, 11.0, towerW / 2 + 0.22);
+    towerGroup.add(fuelPipe);
+
+    // Pipe 3: High-Pressure Purge Line (Titanium Silver, Y=0 to 33)
+    const purgePipe = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 33.0, 8), purgePipeMat);
+    purgePipe.position.set(-towerW / 2 - 0.22, 16.5, 0);
+    towerGroup.add(purgePipe);
+
+    // Crew / Payload Access Room ("White Room" Cleanroom near top at Y = 25.5)
+    const cleanroomGroup = new THREE.Group();
+    cleanroomGroup.position.set(towerW / 2 + 0.4, 25.5, 0.4);
+
+    const roomMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.40, metalness: 0.15 });
+    const windowMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.10, metalness: 0.90 });
+
+    const roomBody = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.8, 2.8), roomMat);
+    roomBody.position.set(1.7, 0, 0);
+    cleanroomGroup.add(roomBody);
+
+    // Dark Tinted Viewing Windows
+    const win = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.06), windowMat);
+    win.position.set(1.7, 0.2, 1.43);
+    cleanroomGroup.add(win);
+
+    // Rooftop HVAC Environmental Conditioning Unit
+    const hvac = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 1.4), trussMat);
+    hvac.position.set(1.7, 1.65, 0);
+    cleanroomGroup.add(hvac);
+
+    // Accordion Seal / Flexible Tunnel extending toward payload fairing
+    const accordMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8, metalness: 0.2 });
+    const accord = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.8, 1.6), accordMat);
+    accord.position.set(3.8, 0, 0);
+    cleanroomGroup.add(accord);
+
+    towerGroup.add(cleanroomGroup);
+
+    // Top Lightning Mast extending above rocket nose
     const mastGeo = new THREE.CylinderGeometry(0.05, 0.15, 6.5, 8);
     const mast = new THREE.Mesh(mastGeo, steelMat);
     mast.position.set(0, towerH + 3.2, 0);
     towerGroup.add(mast);
 
-    // Retractable Gantry Service Swing Arm (Connects to Upper Stage at Y = 20)
+    // ----------------------------------------------------
+    // Two Articulated Umbilical Swing Arms (Retract on liftoff in Beat 1)
+    // ----------------------------------------------------
+    // 1. Upper Stage Umbilical Swing Arm (Stage 2 & Payload Service, Y = 21.0)
     this.swingArm = new THREE.Group();
     this.swingArm.position.set(towerW / 2, 21.0, 0);
 
-    const armTrussGeo = new THREE.BoxGeometry(5.2, 0.8, 0.9);
-    const armTruss = new THREE.Mesh(armTrussGeo, steelMat);
-    armTruss.position.x = 2.6; // extends rightward toward rocket at x = 3.5
-    this.swingArm.add(armTruss);
+    const upperBoomGeo = new THREE.BoxGeometry(5.2, 0.75, 0.8);
+    const upperBoom = new THREE.Mesh(upperBoomGeo, steelMat);
+    upperBoom.position.x = 2.6; // extends rightward toward rocket at x = 3.5
+    this.swingArm.add(upperBoom);
 
-    // Umbilical connection head
-    const headGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.8, 12);
-    const head = new THREE.Mesh(headGeo, concreteMat);
-    head.rotation.z = Math.PI / 2;
-    head.position.set(5.2, 0, 0);
-    this.swingArm.add(head);
+    // Upper Umbilical Disconnect Carrier Head & Flexible Lines
+    const upperHeadGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.8, 12);
+    const upperHead = new THREE.Mesh(upperHeadGeo, concreteMat);
+    upperHead.rotation.z = Math.PI / 2;
+    upperHead.position.set(5.2, 0, 0);
+    this.swingArm.add(upperHead);
+
+    const upperHoseGeo = new THREE.TorusGeometry(0.4, 0.06, 6, 12, Math.PI);
+    const upperHose = new THREE.Mesh(upperHoseGeo, loxPipeMat);
+    upperHose.position.set(4.9, -0.4, 0);
+    upperHose.rotation.z = Math.PI;
+    this.swingArm.add(upperHose);
 
     towerGroup.add(this.swingArm);
+
+    // 2. First Stage / Booster Umbilical Swing Arm (Y = 9.5)
+    this.boosterSwingArm = new THREE.Group();
+    this.boosterSwingArm.position.set(towerW / 2, 9.5, 0);
+
+    const lowerBoomGeo = new THREE.BoxGeometry(5.2, 0.70, 0.75);
+    const lowerBoom = new THREE.Mesh(lowerBoomGeo, steelMat);
+    lowerBoom.position.x = 2.6;
+    this.boosterSwingArm.add(lowerBoom);
+
+    const lowerHeadGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.7, 12);
+    const lowerHead = new THREE.Mesh(lowerHeadGeo, concreteMat);
+    lowerHead.rotation.z = Math.PI / 2;
+    lowerHead.position.set(5.2, 0, 0);
+    this.boosterSwingArm.add(lowerHead);
+
+    const lowerHoseGeo = new THREE.TorusGeometry(0.35, 0.05, 6, 12, Math.PI);
+    const lowerHose = new THREE.Mesh(lowerHoseGeo, fuelPipeMat);
+    lowerHose.position.set(4.9, -0.35, 0);
+    lowerHose.rotation.z = Math.PI;
+    this.boosterSwingArm.add(lowerHose);
+
+    towerGroup.add(this.boosterSwingArm);
+
     this.launchGround.add(towerGroup);
 
+    // ----------------------------------------------------
     // 4 Hold-Down Clamps around rocket base
+    // ----------------------------------------------------
     const clampMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.4, metalness: 0.8 }); // Safety amber
     for (let c = 0; c < 4; c++) {
       const angle = (c * Math.PI) / 2 + Math.PI / 4;
@@ -218,7 +620,13 @@ export class AtmosphereStars {
       );
       clampGroup.rotation.y = angle + Math.PI / 2;
 
-      const clawGeo = new THREE.BoxGeometry(0.4, 1.4, 0.6);
+      // Heavy Hydraulic Base Housing
+      const clampBase = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.8), steelMat);
+      clampBase.position.set(0, 0.25, 0);
+      clampGroup.add(clampBase);
+
+      // Articulated Clamping Claw
+      const clawGeo = new THREE.BoxGeometry(0.38, 1.4, 0.55);
       const claw = new THREE.Mesh(clawGeo, clampMat);
       claw.position.set(0, 0.7, 0);
       clampGroup.add(claw);
@@ -227,29 +635,123 @@ export class AtmosphereStars {
       this.launchGround.add(clampGroup);
     }
 
+    // ----------------------------------------------------
+    // Night-Launch Stadium Floodlights & Volumetric Beam Cones
+    // ----------------------------------------------------
+    const floodlightConfigs = [
+      {
+        // Floodlight 1: Front-Right key light illuminating MAREZERO livery & Indian flag
+        pos: new THREE.Vector3(10.5, 3.8, 8.5),
+        target: new THREE.Vector3(3.5, 12.0, 0),
+        color: 0xecfeff,
+        intensity: 8.5,
+        beamColor: 0x93c5fd,
+        beamOpacity: 0.22
+      },
+      {
+        // Floodlight 2: Front-Left tower / upper stage highlight
+        pos: new THREE.Vector3(-7.5, 6.5, 7.0),
+        target: new THREE.Vector3(3.5, 19.5, 0),
+        color: 0xf8fafc,
+        intensity: 6.5,
+        beamColor: 0xbfdbfe,
+        beamOpacity: 0.18
+      },
+      {
+        // Floodlight 3: Rear-Right crisp cool-cyan back-rim highlight
+        pos: new THREE.Vector3(9.5, 4.8, -9.0),
+        target: new THREE.Vector3(3.5, 11.0, 0),
+        color: 0x7dd3fc,
+        intensity: 7.2,
+        beamColor: 0x7dd3fc,
+        beamOpacity: 0.20
+      }
+    ];
+
+    const fixtureMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    for (const cfg of floodlightConfigs) {
+      // Elevated Support Stanchion Pole
+      const stanchion = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, cfg.pos.y + 2.0, 8), steelMat);
+      stanchion.position.set(cfg.pos.x, (cfg.pos.y - 2.0) / 2, cfg.pos.z);
+      this.launchGround.add(stanchion);
+
+      // Stadium Bank Fixture Head
+      const fixtureBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 0.4), steelMat);
+      fixtureBox.position.copy(cfg.pos);
+      fixtureBox.lookAt(cfg.target);
+      this.launchGround.add(fixtureBox);
+
+      // Glowing Emitter Lenses
+      const lens = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.6), fixtureMat);
+      lens.position.set(0, 0, 0.21);
+      fixtureBox.add(lens);
+
+      // High-output Spotlight
+      const spot = new THREE.SpotLight(cfg.color, cfg.intensity, 90, Math.PI / 6.0, 0.55, 0.9);
+      spot.position.copy(cfg.pos);
+      spot.target.position.copy(cfg.target);
+      spot.castShadow = false; // lightweight for 60 FPS
+      this.launchGround.add(spot);
+      this.launchGround.add(spot.target);
+
+      // Volumetric Light Beam Cone
+      const { mesh: beamMesh, mat: beamMat } = createBeamCone(
+        cfg.pos,
+        cfg.target,
+        0.4,
+        4.0,
+        cfg.beamColor,
+        cfg.beamOpacity
+      );
+      this.launchGround.add(beamMesh);
+
+      this.floodlights.push({
+        light: spot,
+        beamMesh,
+        baseIntensity: cfg.intensity,
+        baseBeamOpacity: cfg.beamOpacity
+      });
+    }
+
     // Ignition Flash Light at pad base
     this.ignitionLight = new THREE.PointLight(0xff7711, 0, 45, 1.6);
     this.ignitionLight.position.set(3.5, 0.5, 0);
     this.launchGround.add(this.ignitionLight);
 
-    // Cryogenic Boil-Off Vapor Particles
-    const vaporCount = 80;
+    // ----------------------------------------------------
+    // Soft Volumetric Cryogenic Vent Vapor (Semi-transparent billboarded sprites)
+    // ----------------------------------------------------
     const vaporGeo = new THREE.BufferGeometry();
-    this.vaporPositions = new Float32Array(vaporCount * 3);
-    for (let i = 0; i < vaporCount; i++) {
-      this.vaporPositions[i * 3] = 3.5 + (Math.random() - 0.5) * 1.5;
-      this.vaporPositions[i * 3 + 1] = 18.0 + (Math.random() - 0.5) * 4.0;
-      this.vaporPositions[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+    this.vaporPositions = new Float32Array(this.vaporCount * 3);
+
+    // Initialize with soft dispersed plume right of the upper stage (vent at X=5.12, Y=20.8)
+    for (let i = 0; i < this.vaporCount; i++) {
+      const idx = i * 3;
+      const life = i / this.vaporCount;
+      const driftX = Math.pow(life, 0.62) * 3.4;
+      const driftY = Math.sin(life * Math.PI * 0.7) * 0.35 - Math.pow(life, 1.8) * 1.3;
+      const driftZ = Math.sin(i * 3.7) * (0.45 * life);
+      const jitter = Math.sin(i * 11.3) * (0.2 * life);
+
+      this.vaporPositions[idx] = 5.12 + driftX + jitter;
+      this.vaporPositions[idx + 1] = 20.8 + driftY + jitter;
+      this.vaporPositions[idx + 2] = 0.2 + driftZ;
     }
     vaporGeo.setAttribute('position', new THREE.BufferAttribute(this.vaporPositions, 3));
-    const vaporMat = new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 0.75,
+
+    this.vaporMat = new THREE.PointsMaterial({
+      map: createVaporTexture(),
+      size: 3.2,
       transparent: true,
-      opacity: 0.55,
-      depthWrite: false
+      depthWrite: false,
+      opacity: 0.25,
+      blending: THREE.NormalBlending,
+      vertexColors: false
     });
-    this.vaporPoints = new THREE.Points(vaporGeo, vaporMat);
+
+    this.vaporPoints = new THREE.Points(vaporGeo, this.vaporMat);
+    this.vaporPoints.frustumCulled = false;
     this.launchGround.add(this.vaporPoints);
 
     this.group.add(this.launchGround);
@@ -314,7 +816,7 @@ export class AtmosphereStars {
       size: 0.28,
       vertexColors: true,
       transparent: true,
-      opacity: 0.92
+      opacity: 0.38
     });
     this.starfield = new THREE.Points(starGeo, starMat);
     this.group.add(this.starfield);
@@ -361,29 +863,56 @@ export class AtmosphereStars {
     });
     const moonMesh = new THREE.Mesh(moonSphereGeo, moonSphereMat);
     moonMesh.name = 'MoonGlobe';
-    // Orient near side with Oceanus Procellarum, Imbrium, and Tycho toward the camera
     moonMesh.rotation.y = Math.PI * 1.5;
     moonMesh.castShadow = true;
     moonMesh.receiveShadow = false;
     this.approachMoon.add(moonMesh);
 
-    // Position ahead along negative Z
     this.approachMoon.position.set(0, 15, -120);
-    this.approachMoon.visible = false; // Hidden until p >= 0.58
+    this.approachMoon.visible = false;
     this.group.add(this.approachMoon);
   }
 
   /**
-   * Deterministic animation of launch pad elements:
-   * swing arm retraction, hold-down clamps, vapor venting, and ignition flash
+   * Deterministic cryogenic vapor billow simulation
    */
-  public updatePad(p: number): void {
+  private updateVaporParticles(timeSec: number): void {
+    const ventX = 5.12;
+    const ventY = 20.8;
+    const ventZ = 0.2;
+    const pos = this.vaporPositions;
+
+    for (let i = 0; i < this.vaporCount; i++) {
+      const idx = i * 3;
+      const life = ((timeSec * 0.75 + i * (1.0 / this.vaporCount)) % 1.0);
+
+      // Gently billow outward to the right (+X) and curl downward with gravity
+      const driftX = Math.pow(life, 0.62) * 3.4;
+      const driftY = Math.sin(life * Math.PI * 0.7) * 0.35 - Math.pow(life, 1.8) * 1.3;
+      const driftZ = Math.sin(i * 3.7 + timeSec * 1.4) * (0.45 * life);
+      const jitter = Math.sin(i * 11.3) * (0.2 * life);
+
+      pos[idx] = ventX + driftX + jitter;
+      pos[idx + 1] = ventY + driftY + jitter;
+      pos[idx + 2] = ventZ + driftZ;
+    }
+    this.vaporPoints.geometry.attributes.position.needsUpdate = true;
+  }
+
+  /**
+   * Deterministic animation of launch pad elements:
+   * swing arms retraction, hold-down clamps, vapor venting, floodlights, and ignition flash
+   */
+  public updatePad(p: number, timeSec: number = 0): void {
     const clamp = (val: number, min = 0, max = 1) => Math.max(min, Math.min(max, val));
     const seg = (a: number, b: number) => clamp((p - a) / (b - a));
 
-    // Swing Arm Retraction (p = 0.06 -> 0.10)
-    const armRetract = seg(0.06, 0.10);
-    this.swingArm.rotation.y = -armRetract * 1.35; // swings 77° away from rocket
+    // Swing Arms Retraction (p = 0.05 -> 0.10 in Beat 1)
+    const armRetract = seg(0.05, 0.10);
+    this.swingArm.rotation.y = -armRetract * 1.38; // swings ~79° away from upper stage
+    if (this.boosterSwingArm) {
+      this.boosterSwingArm.rotation.y = -armRetract * 1.30; // swings ~74° away from booster
+    }
 
     // Hold-Down Clamps Release (p = 0.07 -> 0.09)
     const clampRelease = seg(0.07, 0.09);
@@ -399,13 +928,29 @@ export class AtmosphereStars {
       this.ignitionLight.intensity = 0;
     }
 
-    // Cryogenic Boil-Off Vapor (p = 0.02 -> 0.08)
-    if (p >= 0.02 && p <= 0.08) {
+    // Cryogenic Boil-Off Vapor (Active on pad p <= 0.08, fades out during liftoff)
+    if (p <= 0.08) {
       this.vaporPoints.visible = true;
-      const opacity = (1 - seg(0.06, 0.08)) * 0.6;
-      (this.vaporPoints.material as THREE.PointsMaterial).opacity = opacity;
+      const fade = 1.0 - seg(0.06, 0.08);
+      this.vaporMat.opacity = 0.25 * fade;
+      this.updateVaporParticles(timeSec);
     } else {
       this.vaporPoints.visible = false;
+    }
+
+    // Stadium Floodlights (Active on pad, fades smoothly as rocket ascends past p = 0.08 -> 0.22)
+    const floodFade = 1.0 - seg(0.08, 0.22);
+    for (const f of this.floodlights) {
+      f.light.intensity = f.baseIntensity * floodFade;
+      (f.beamMesh.material as THREE.MeshBasicMaterial).opacity = f.baseBeamOpacity * floodFade;
+    }
+
+    // Aviation Warning Beacons (Subtle pulsing red glow at mast tips)
+    if (this.beaconMaterials.length > 0) {
+      const beaconFlash = 0.55 + 0.45 * Math.sin(timeSec * 5.0);
+      for (const mat of this.beaconMaterials) {
+        mat.color.setRGB(1.0 * beaconFlash, 0.06 * beaconFlash, 0.10 * beaconFlash);
+      }
     }
   }
 }
