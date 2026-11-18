@@ -101,11 +101,23 @@ const LANDING_CRATERS: OrganicCraterDef[] = [
  * and smoothly blending outer ejecta slopes into surrounding topography.
  */
 export function calculateTerrainSample(x: number, z: number): { y: number; cavity: number; rim: number } {
-  // 1. Multi-octave harmonic lunar topography
-  let y = Math.sin(x * 0.08) * 0.55 + Math.cos(z * 0.09) * 0.45;
-  y += Math.sin(x * 0.22 + z * 0.18) * 0.28;
-  y += Math.sin(x * 0.55 - z * 0.42) * 0.12;
-  y += Math.sin(x * 1.25 + z * 0.95) * 0.04;
+  // 1. Isotropic multi-harmonic lunar topography rotated by non-axis-aligned angles
+  let y = 0;
+  // Direction 19°
+  const u1 = x * 0.945 + z * 0.326;
+  y += Math.sin(u1 * 0.085) * 0.55;
+  // Direction 73°
+  const u2 = x * 0.292 + z * 0.956;
+  y += Math.sin(u2 * 0.11 + 1.2) * 0.42;
+  // Direction 137°
+  const u3 = -x * 0.731 + z * 0.682;
+  y += Math.sin(u3 * 0.22 - 0.7) * 0.25;
+  // Direction 211°
+  const u4 = -x * 0.857 - z * 0.515;
+  y += Math.sin(u4 * 0.46 + 2.1) * 0.12;
+  // Direction 289°
+  const u5 = x * 0.326 - z * 0.945;
+  y += Math.sin(u5 * 0.92 - 1.4) * 0.04;
 
   let cavity = 0;
   let rim = 0;
@@ -275,7 +287,7 @@ export class LunarSurface {
       // Albedo mottling:
       // Dark basaltic grey #3b3a38 in crater floors blending to lighter highland dust #7d7b76 on ridges
       let tone = 0.5 + (sample.y * 0.25) + (sample.rim * 0.40) - (sample.cavity * 0.50);
-      const microNoise = (Math.sin(x * 14.0 + z * 11.0) * Math.cos(x * 9.0 - z * 16.0)) * 0.04;
+      const microNoise = (Math.sin(x * 7.3 + z * 12.1) + Math.cos(x * 13.7 - z * 5.9)) * 0.025;
       tone = Math.max(0.0, Math.min(1.0, tone + microNoise));
 
       let cr: number, cg: number, cb: number;

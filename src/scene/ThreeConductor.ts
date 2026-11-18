@@ -737,7 +737,8 @@ export class ThreeConductor {
     const domeMorph = ease(seg(p, 0.86, 0.98));
     this.surface.setMorphProgress(domeMorph);
     this.skyDome.group.visible = domeMorph > 0.05;
-    this.skyDome.domeWireframeGroup.scale.set(domeMorph, domeMorph, domeMorph);
+    // Keep dome wireframe fully expanded so it never crushes/shrinks around the lander
+    this.skyDome.domeWireframeGroup.scale.set(1.0, 1.0, 1.0);
     this.isDomeInteractive = p >= 0.86;
 
     // Reparent lander preserving single persistent instance
@@ -745,7 +746,7 @@ export class ThreeConductor {
       if (this.lander.group.parent !== this.skyDome.group) {
         this.skyDome.group.add(this.lander.group);
       }
-      const landerY = THREE.MathUtils.lerp(0.85, 0.21, domeMorph);
+      const landerY = THREE.MathUtils.lerp(0.85, 0.085, domeMorph);
       this.lander.group.position.set(0, landerY, 0);
       this.lander.group.rotation.set(0, 0, 0);
       this.lander.group.scale.set(this._craftState.landerScale, this._craftState.landerScale, this._craftState.landerScale);

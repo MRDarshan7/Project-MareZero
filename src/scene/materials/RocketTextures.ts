@@ -563,9 +563,58 @@ export class RocketTextures {
     const size = 1024;
     const prng = new DeterministicPRNG(19690720);
 
-    // 1. Compute Seamless 2D Toroidal Heightfield (Multi-Scale Noise & Fine Dust Grain)
+    // 1. Compute Seamless 2D Toroidal Heightfield (Isotropic Multi-Octave Noise & Fine Dust Grain)
     const heightField = new Float32Array(size * size);
-    const twoPi = Math.PI * 2;
+
+    // Permutation table for seamless toroidal gradient noise
+    const perm = new Uint8Array(512);
+    for (let i = 0; i < 256; i++) perm[i] = i;
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(prng.next() * (i + 1));
+      const tmp = perm[i]; perm[i] = perm[j]; perm[j] = tmp;
+    }
+    for (let i = 0; i < 256; i++) perm[256 + i] = perm[i];
+
+    // 8 isotropic 2D unit gradients offset by 37° (non-axis-aligned, non-diagonal)
+    const gradX = new Float32Array(8);
+    const gradY = new Float32Array(8);
+    for (let g = 0; g < 8; g++) {
+      const ang = (g / 8) * Math.PI * 2 + (37 * Math.PI / 180);
+      gradX[g] = Math.cos(ang);
+      gradY[g] = Math.sin(ang);
+    }
+
+    const sampleSeamlessNoise = (u: number, v: number, freq: number): number => {
+      const fu = u * freq;
+      const fv = v * freq;
+      const x0 = Math.floor(fu);
+      const y0 = Math.floor(fv);
+      const fx = fu - x0;
+      const fy = fv - y0;
+      // Quintic smoothstep for C2 continuity (eliminates grid seams and banding)
+      const sx = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
+      const sy = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+
+      // Toroidal wrapping so textures tile seamlessly across (16, 16) repeat
+      const gx0 = ((x0 % freq) + freq) % freq;
+      const gy0 = ((y0 % freq) + freq) % freq;
+      const gx1 = (gx0 + 1) % freq;
+      const gy1 = (gy0 + 1) % freq;
+
+      const g00 = perm[(perm[gx0 % 256] + gy0) % 256] % 8;
+      const g10 = perm[(perm[gx1 % 256] + gy0) % 256] % 8;
+      const g01 = perm[(perm[gx0 % 256] + gy1) % 256] % 8;
+      const g11 = perm[(perm[gx1 % 256] + gy1) % 256] % 8;
+
+      const d00 = gradX[g00] * fx + gradY[g00] * fy;
+      const d10 = gradX[g10] * (fx - 1) + gradY[g10] * fy;
+      const d01 = gradX[g01] * fx + gradY[g01] * (fy - 1);
+      const d11 = gradX[g11] * (fx - 1) + gradY[g11] * (fy - 1);
+
+      const nx0 = d00 + sx * (d10 - d00);
+      const nx1 = d01 + sx * (d11 - d01);
+      return nx0 + sy * (nx1 - nx0);
+    };
 
     for (let y = 0; y < size; y++) {
       const v = y / size;
@@ -573,17 +622,15 @@ export class RocketTextures {
         const u = x / size;
         const idx = y * size + x;
 
-        // Base periodic harmonic undulations (seamless integer frequencies)
+        // Isotropic multi-scale terrain noise (completely eliminates diagonal grid moiré)
         let elev = 0.50;
-        elev += 0.045 * Math.sin(twoPi * 2 * u) * Math.cos(twoPi * 2 * v);
-        elev += 0.030 * Math.sin(twoPi * 5 * u + 1.2) * Math.sin(twoPi * 4 * v);
-        elev += 0.018 * Math.cos(twoPi * 9 * u) * Math.cos(twoPi * 8 * v);
-        elev += 0.011 * Math.sin(twoPi * 17 * u - 0.7) * Math.sin(twoPi * 15 * v);
-        elev += 0.007 * Math.sin(twoPi * 31 * u + 2.1) * Math.cos(twoPi * 29 * v);
-        // High-frequency fine dust grain noise
-        elev += 0.004 * Math.sin(twoPi * 63 * u - 1.4) * Math.sin(twoPi * 61 * v);
-        elev += 0.0025 * Math.cos(twoPi * 127 * u + 0.8) * Math.cos(twoPi * 125 * v);
-        elev += (prng.next() - 0.5) * 0.004; // gritty microscopic dust noise
+        elev += sampleSeamlessNoise(u, v, 3) * 0.075;
+        elev += sampleSeamlessNoise(u, v, 6) * 0.040;
+        elev += sampleSeamlessNoise(u, v, 12) * 0.022;
+        elev += sampleSeamlessNoise(u, v, 24) * 0.012;
+        elev += sampleSeamlessNoise(u, v, 48) * 0.006;
+        elev += sampleSeamlessNoise(u, v, 96) * 0.003;
+        elev += (prng.next() - 0.5) * 0.005; // powdery micro-grain grit
 
         heightField[idx] = elev;
       }

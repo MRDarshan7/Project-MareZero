@@ -93,6 +93,11 @@ async function run() {
   await scrollToProgress(0.85);
   await page.screenshot({ path: path.join(outDir, '05-lunar-touchdown.png') });
 
+  // 5b. Stage 5b: Beat 8 - Sky-Dome instrument transition (0.90)
+  console.log('Capturing stage 5b: Beat 8 Sky-Dome transition...');
+  await scrollToProgress(0.90);
+  await page.screenshot({ path: path.join(outDir, '05b-beat8-skydome-morph.png') });
+
   // 6. Stage 6: Sky-Dome Dashboard
   console.log('Capturing stage 6: Sky-Dome Dashboard...');
   await scrollToProgress(1.0);

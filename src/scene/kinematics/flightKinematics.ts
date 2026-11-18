@@ -176,9 +176,9 @@ export function computeCraftState(
     landerWorldY = 0.85;
     landerWorldZ = 0;
 
-    // Morph scale to fit cleanly within dashboard sky dome base without clipping wireframe
+    // Morph scale to fit cleanly within dashboard sky dome base without clipping wireframe (scaled by ~0.4x to 0.10)
     const domeMorph = ease(seg(p, 0.86, 0.98));
-    landerScale = THREE.MathUtils.lerp(1.0, 0.24, domeMorph);
+    landerScale = THREE.MathUtils.lerp(1.0, 0.10, domeMorph);
   }
 
   // -------------------------------------------------------------------------
@@ -477,7 +477,7 @@ export function computeCameraState(
     const cz = targetZoom * Math.cos(targetPitch) * Math.cos(targetYaw);
 
     camPos.set(cx, cy, cz);
-    const targetLookY = THREE.MathUtils.lerp(0.85, 0.22, domeMorph);
+    const targetLookY = THREE.MathUtils.lerp(0.85, 0.085, domeMorph);
     lookTarget.set(0, targetLookY, 0); // Locked permanently on centered lander
   }
 

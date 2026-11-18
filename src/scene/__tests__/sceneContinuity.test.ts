@@ -59,7 +59,9 @@ class HeadlessSceneRig {
       if (this.lander.group.parent !== this.scene) {
         this.scene.add(this.lander.group);
       }
-      this.lander.group.position.set(0, 0.85, 0);
+      const domeMorph = Math.min(1, Math.max(0, (p - 0.86) / 0.12));
+      const landerY = THREE.MathUtils.lerp(0.85, 0.085, domeMorph);
+      this.lander.group.position.set(0, landerY, 0);
       this.lander.group.rotation.set(0, 0, 0);
       this.lander.group.scale.set(craftState.landerScale, craftState.landerScale, craftState.landerScale);
     } else if (p >= 0.55) {
