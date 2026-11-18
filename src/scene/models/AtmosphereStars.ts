@@ -154,12 +154,13 @@ export class AtmosphereStars {
     this.directionalSun.shadow.mapSize.width = 2048;
     this.directionalSun.shadow.mapSize.height = 2048;
     this.directionalSun.shadow.camera.near = 0.5;
-    this.directionalSun.shadow.camera.far = 250;
-    this.directionalSun.shadow.camera.left = -32;
-    this.directionalSun.shadow.camera.right = 32;
-    this.directionalSun.shadow.camera.top = 32;
-    this.directionalSun.shadow.camera.bottom = -32;
-    this.directionalSun.shadow.bias = -0.0005;
+    this.directionalSun.shadow.camera.far = 300;
+    this.directionalSun.shadow.camera.left = -35;
+    this.directionalSun.shadow.camera.right = 35;
+    this.directionalSun.shadow.camera.top = 35;
+    this.directionalSun.shadow.camera.bottom = -35;
+    this.directionalSun.shadow.bias = -0.0003;
+    this.directionalSun.shadow.normalBias = 0.02;
     this.group.add(this.directionalSun);
 
     // Rim light for dramatic aerospace edge highlighting

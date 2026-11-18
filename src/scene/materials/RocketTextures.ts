@@ -551,8 +551,8 @@ export class RocketTextures {
 
   /**
    * Generates seamless 1024x1024 polar lunar regolith PBR maps:
-   * 1. Albedo map: authentic titanium/iron-bearing basalt & anorthosite tones, micro-craters, bright ejecta rays
-   * 2. Tangent-space Normal map: multi-octave relief with raised crater rims & micro-depression shadows under grazing polar sun
+   * 1. Albedo map: gritty lunar soil mottling from dark basaltic grey (#3b3a38) to lighter highland dust (#7d7b76)
+   * 2. Tangent-space Normal map: multi-scale relief with high-frequency fine dust grain noise & organic crater rims
    * 3. Displacement / Bump map: elevation heightfield for micro-relief
    * Cached statically for zero GC runtime performance.
    */
@@ -563,7 +563,7 @@ export class RocketTextures {
     const size = 1024;
     const prng = new DeterministicPRNG(19690720);
 
-    // 1. Compute Seamless 2D Toroidal Heightfield
+    // 1. Compute Seamless 2D Toroidal Heightfield (Multi-Scale Noise & Fine Dust Grain)
     const heightField = new Float32Array(size * size);
     const twoPi = Math.PI * 2;
 
@@ -578,66 +578,80 @@ export class RocketTextures {
         elev += 0.045 * Math.sin(twoPi * 2 * u) * Math.cos(twoPi * 2 * v);
         elev += 0.030 * Math.sin(twoPi * 5 * u + 1.2) * Math.sin(twoPi * 4 * v);
         elev += 0.018 * Math.cos(twoPi * 9 * u) * Math.cos(twoPi * 8 * v);
-        elev += 0.009 * Math.sin(twoPi * 17 * u - 0.7) * Math.sin(twoPi * 15 * v);
-        elev += 0.004 * Math.sin(twoPi * 31 * u + 2.1) * Math.cos(twoPi * 29 * v);
+        elev += 0.011 * Math.sin(twoPi * 17 * u - 0.7) * Math.sin(twoPi * 15 * v);
+        elev += 0.007 * Math.sin(twoPi * 31 * u + 2.1) * Math.cos(twoPi * 29 * v);
+        // High-frequency fine dust grain noise
+        elev += 0.004 * Math.sin(twoPi * 63 * u - 1.4) * Math.sin(twoPi * 61 * v);
+        elev += 0.0025 * Math.cos(twoPi * 127 * u + 0.8) * Math.cos(twoPi * 125 * v);
+        elev += (prng.next() - 0.5) * 0.004; // gritty microscopic dust noise
 
         heightField[idx] = elev;
       }
     }
 
-    // 2. Seamless Micro & Medium Impact Craters
-    const craters: Array<{ cx: number; cy: number; r: number; bowl: number; rim: number }> = [];
-    // 6 prominent medium craters
-    for (let i = 0; i < 6; i++) {
+    // 2. Seamless Organic Micro & Medium Impact Craters with Non-uniform Rims
+    const craters: Array<{ cx: number; cy: number; r: number; bowl: number; rim: number; seed: number }> = [];
+    // 8 prominent medium craters
+    for (let i = 0; i < 8; i++) {
       craters.push({
         cx: prng.next() * size,
         cy: prng.next() * size,
-        r: 28 + prng.next() * 26,
-        bowl: 0.32 + prng.next() * 0.12,
-        rim: 0.22 + prng.next() * 0.10
+        r: 26 + prng.next() * 28,
+        bowl: 0.30 + prng.next() * 0.14,
+        rim: 0.20 + prng.next() * 0.12,
+        seed: prng.next() * 100
       });
     }
-    // 75 secondary micro-craters
-    for (let i = 0; i < 75; i++) {
+    // 95 secondary micro-craters
+    for (let i = 0; i < 95; i++) {
       craters.push({
         cx: prng.next() * size,
         cy: prng.next() * size,
-        r: 6 + prng.next() * 16,
-        bowl: 0.20 + prng.next() * 0.14,
-        rim: 0.14 + prng.next() * 0.09
+        r: 5 + prng.next() * 18,
+        bowl: 0.18 + prng.next() * 0.15,
+        rim: 0.13 + prng.next() * 0.10,
+        seed: prng.next() * 100
       });
     }
 
     for (const c of craters) {
       const cr = c.r;
-      const extent = Math.ceil(cr * 1.5);
+      const extent = Math.ceil(cr * 2.2);
       const minX = Math.floor(c.cx - extent);
       const maxX = Math.ceil(c.cx + extent);
       const minY = Math.floor(c.cy - extent);
       const maxY = Math.ceil(c.cy + extent);
 
       for (let py = minY; py <= maxY; py++) {
-        // Toroidal wrapping
         const wy = ((py % size) + size) % size;
-        const dy = Math.abs(py - c.cy);
+        const dy = py - c.cy;
 
         for (let px = minX; px <= maxX; px++) {
           const wx = ((px % size) + size) % size;
-          const dx = Math.abs(px - c.cx);
+          const dx = px - c.cx;
           const dist = Math.hypot(dx, dy);
+          const th = Math.atan2(dy, dx);
 
-          if (dist < cr * 0.8) {
+          // Organic radius distortion (lobate, irregular crater rim)
+          const distortion = 1.0 + 0.14 * Math.sin(3 * th + c.seed) + 0.08 * Math.cos(5 * th - c.seed * 0.6);
+          const effR = cr * distortion;
+          const u = dist / effR;
+
+          const idx = wy * size + wx;
+          if (u < 0.82) {
             // Excavation bowl
-            const u = dist / (cr * 0.8);
-            const bowlDrop = c.bowl * Math.cos(u * (Math.PI / 2));
-            const idx = wy * size + wx;
+            const bowlDrop = c.bowl * Math.cos((u / 0.82) * (Math.PI / 2));
             heightField[idx] = Math.max(0.04, heightField[idx] - bowlDrop);
-          } else if (dist < cr * 1.35) {
-            // Raised ejecta rim ring
-            const u = (dist - cr * 0.8) / (cr * 0.55);
-            const rimLift = c.rim * Math.sin(u * Math.PI);
-            const idx = wy * size + wx;
-            heightField[idx] = Math.min(0.98, heightField[idx] + rimLift);
+          } else if (u < 2.0) {
+            // Smoothly blended outer ejecta slope
+            let rimFactor: number;
+            if (u < 0.95) {
+              rimFactor = Math.sin(((u - 0.82) / 0.13) * (Math.PI / 2));
+            } else {
+              const ejectaU = (u - 0.95) / 1.05;
+              rimFactor = Math.exp(-4.2 * ejectaU * ejectaU);
+            }
+            heightField[idx] = Math.min(0.98, heightField[idx] + c.rim * rimFactor);
           }
         }
       }
@@ -650,7 +664,7 @@ export class RocketTextures {
     const normalCtx = normalCanvas.getContext('2d')!;
     const normalImg = normalCtx.createImageData(size, size);
     const nData = normalImg.data;
-    const normalStrength = 4.2;
+    const normalStrength = 4.8;
 
     for (let y = 0; y < size; y++) {
       const y0 = (y - 1 + size) % size;
@@ -711,58 +725,69 @@ export class RocketTextures {
     bumpTex.magFilter = THREE.LinearFilter;
     this.regolithBumpMap = bumpTex;
 
-    // 5. Generate High-Resolution Albedo (Diffuse) Map
+    // 5. Generate High-Resolution Albedo (Diffuse) Map with Authentic Regolith Mottling
     const albedoCanvas = document.createElement('canvas');
     albedoCanvas.width = size;
     albedoCanvas.height = size;
     const aCtx = albedoCanvas.getContext('2d')!;
 
-    // Base tone: natural silver-grey lunar regolith
-    aCtx.fillStyle = '#686c76';
+    // Base tone: natural gritty lunar regolith mid-tone (#555450)
+    aCtx.fillStyle = '#555450';
     aCtx.fillRect(0, 0, size, size);
 
-    // Subtle patchy mineral variance (anorthosite vs basaltic fines)
+    // Multi-scale mineral patches: blending dark basaltic grey (#3b3a38) and lighter highland dust (#7d7b76)
     const patchPrng = new DeterministicPRNG(19710730);
-    for (let p = 0; p < 24; p++) {
+    for (let p = 0; p < 36; p++) {
       const px = patchPrng.next() * size;
       const py = patchPrng.next() * size;
-      const pr = 40 + patchPrng.next() * 90;
+      const pr = 35 + patchPrng.next() * 110;
       const isDark = patchPrng.next() > 0.45;
       const pGrad = aCtx.createRadialGradient(px, py, 0, px, py, pr);
-      pGrad.addColorStop(0.0, isDark ? 'rgba(52, 55, 62, 0.42)' : 'rgba(132, 137, 148, 0.35)');
-      pGrad.addColorStop(1.0, 'rgba(104, 108, 118, 0.0)');
+      // Dark basaltic grey (#3b3a38 = rgb(59,58,56)) vs lighter highland dust (#7d7b76 = rgb(125,123,118))
+      pGrad.addColorStop(0.0, isDark ? 'rgba(59, 58, 56, 0.55)' : 'rgba(125, 123, 118, 0.45)');
+      pGrad.addColorStop(1.0, 'rgba(85, 84, 80, 0.0)');
       aCtx.fillStyle = pGrad;
       aCtx.beginPath();
       aCtx.arc(px, py, pr, 0, Math.PI * 2);
       aCtx.fill();
     }
 
-    // Paint crater bowls (darkened floor) and rims (brightened impact shock)
+    // Paint crater bowls (dark basaltic floor #3b3a38) and organic rims (lighter highland shock dust #7d7b76)
     for (const c of craters) {
       // Excavation bowl
       const bowlGrad = aCtx.createRadialGradient(c.cx, c.cy, 0, c.cx, c.cy, c.r * 0.85);
-      bowlGrad.addColorStop(0.0, 'rgba(40, 43, 50, 0.65)');
-      bowlGrad.addColorStop(0.85, 'rgba(65, 69, 78, 0.40)');
-      bowlGrad.addColorStop(1.0, 'rgba(104, 108, 118, 0.0)');
+      bowlGrad.addColorStop(0.0, 'rgba(59, 58, 56, 0.72)');
+      bowlGrad.addColorStop(0.85, 'rgba(72, 70, 68, 0.45)');
+      bowlGrad.addColorStop(1.0, 'rgba(85, 84, 80, 0.0)');
       aCtx.fillStyle = bowlGrad;
       aCtx.beginPath();
       aCtx.arc(c.cx, c.cy, c.r * 0.85, 0, Math.PI * 2);
       aCtx.fill();
 
-      // Rim highlight
-      aCtx.strokeStyle = 'rgba(215, 222, 235, 0.55)';
-      aCtx.lineWidth = Math.max(1.5, c.r * 0.16);
+      // Organic rim highlight (#7d7b76 shock-melt ejecta)
+      aCtx.strokeStyle = 'rgba(125, 123, 118, 0.65)';
+      aCtx.lineWidth = Math.max(1.8, c.r * 0.18);
       aCtx.beginPath();
-      aCtx.arc(c.cx, c.cy, c.r * 0.95, 0, Math.PI * 2);
+      // Draw slightly wavy organic rim outline
+      const segments = 24;
+      for (let s = 0; s <= segments; s++) {
+        const th = (s / segments) * Math.PI * 2;
+        const distR = c.r * (0.95 + 0.10 * Math.sin(3 * th + c.seed));
+        const rx = c.cx + Math.cos(th) * distR;
+        const ry = c.cy + Math.sin(th) * distR;
+        if (s === 0) aCtx.moveTo(rx, ry);
+        else aCtx.lineTo(rx, ry);
+      }
+      aCtx.closePath();
       aCtx.stroke();
 
       // Delicate micro-ejecta rays for prominent craters (r > 20)
       if (c.r > 20) {
-        for (let ray = 0; ray < 14; ray++) {
-          const ang = (ray / 14) * Math.PI * 2 + (patchPrng.next() - 0.5) * 0.25;
-          const rayLen = c.r * (1.2 + patchPrng.next() * 1.8);
-          aCtx.strokeStyle = `rgba(225, 232, 245, ${0.18 + patchPrng.next() * 0.22})`;
-          aCtx.lineWidth = 1.2;
+        for (let ray = 0; ray < 16; ray++) {
+          const ang = (ray / 16) * Math.PI * 2 + (patchPrng.next() - 0.5) * 0.25;
+          const rayLen = c.r * (1.3 + patchPrng.next() * 2.0);
+          aCtx.strokeStyle = `rgba(125, 123, 118, ${0.22 + patchPrng.next() * 0.25})`;
+          aCtx.lineWidth = 1.3;
           aCtx.beginPath();
           aCtx.moveTo(c.cx + Math.cos(ang) * (c.r * 0.9), c.cy + Math.sin(ang) * (c.r * 0.9));
           aCtx.lineTo(c.cx + Math.cos(ang) * (c.r * 0.9 + rayLen), c.cy + Math.sin(ang) * (c.r * 0.9 + rayLen));
@@ -771,15 +796,16 @@ export class RocketTextures {
       }
     }
 
-    // Regolith dust speckles
-    const dustCount = 12000;
+    // High-frequency fine dust grain speckles (powdery gritty soil texture)
+    const dustCount = 28000;
     for (let i = 0; i < dustCount; i++) {
       const rx = patchPrng.next() * size;
       const ry = patchPrng.next() * size;
-      const isLight = patchPrng.next() > 0.5;
-      const alpha = 0.04 + patchPrng.next() * 0.06;
-      aCtx.fillStyle = isLight ? `rgba(240, 245, 255, ${alpha})` : `rgba(20, 23, 28, ${alpha})`;
-      aCtx.fillRect(rx, ry, 2, 2);
+      const isLight = patchPrng.next() > 0.48;
+      const alpha = 0.06 + patchPrng.next() * 0.10;
+      aCtx.fillStyle = isLight ? `rgba(125, 123, 118, ${alpha})` : `rgba(45, 44, 42, ${alpha})`;
+      const sz = patchPrng.next() > 0.85 ? 2 : 1;
+      aCtx.fillRect(rx, ry, sz, sz);
     }
 
     const albedoTex = new THREE.CanvasTexture(albedoCanvas);
@@ -791,13 +817,13 @@ export class RocketTextures {
     this.regolithAlbedoTexture = albedoTex;
   }
 
-  public static getRegolithAlbedoTexture(repeatU: number = 8, repeatV: number = 8): THREE.Texture {
+  public static getRegolithAlbedoTexture(repeatU: number = 16, repeatV: number = 16): THREE.Texture {
     if (!this.regolithAlbedoTexture) {
       this.generateRegolithMaps();
     }
     if (typeof document === 'undefined') return new THREE.Texture();
-    if (repeatU === 8 && repeatV === 8) {
-      this.regolithAlbedoTexture!.repeat.set(8, 8);
+    if (repeatU === 16 && repeatV === 16) {
+      this.regolithAlbedoTexture!.repeat.set(16, 16);
       return this.regolithAlbedoTexture!;
     }
     const tex = this.regolithAlbedoTexture!.clone();
@@ -806,13 +832,13 @@ export class RocketTextures {
     return tex;
   }
 
-  public static getRegolithNormalMap(repeatU: number = 8, repeatV: number = 8): THREE.Texture {
+  public static getRegolithNormalMap(repeatU: number = 16, repeatV: number = 16): THREE.Texture {
     if (!this.regolithNormalMap) {
       this.generateRegolithMaps();
     }
     if (typeof document === 'undefined') return new THREE.Texture();
-    if (repeatU === 8 && repeatV === 8) {
-      this.regolithNormalMap!.repeat.set(8, 8);
+    if (repeatU === 16 && repeatV === 16) {
+      this.regolithNormalMap!.repeat.set(16, 16);
       return this.regolithNormalMap!;
     }
     const tex = this.regolithNormalMap!.clone();
@@ -821,13 +847,13 @@ export class RocketTextures {
     return tex;
   }
 
-  public static getRegolithBumpMap(repeatU: number = 8, repeatV: number = 8): THREE.Texture {
+  public static getRegolithBumpMap(repeatU: number = 16, repeatV: number = 16): THREE.Texture {
     if (!this.regolithBumpMap) {
       this.generateRegolithMaps();
     }
     if (typeof document === 'undefined') return new THREE.Texture();
-    if (repeatU === 8 && repeatV === 8) {
-      this.regolithBumpMap!.repeat.set(8, 8);
+    if (repeatU === 16 && repeatV === 16) {
+      this.regolithBumpMap!.repeat.set(16, 16);
       return this.regolithBumpMap!;
     }
     const tex = this.regolithBumpMap!.clone();
@@ -1053,23 +1079,23 @@ export function createSolarCellMaterial(): THREE.MeshStandardMaterial {
 
 /**
  * Creates Hapke / Lommel-Seeliger regolith material with full PBR albedo, normal, and bump mapping.
- * Matches Canadian Space Agency cinematic lunar surface exploration visual standards.
+ * Features high-frequency fine dust grain noise, mid-scale rocky variation, and authentic polar shadow relief.
  * Produces crisp, deep shadow relief under low-angle grazing polar sunlight.
  */
-export function createLunarRegolithMaterial(repeatU: number = 8, repeatV: number = 8): THREE.MeshStandardMaterial {
+export function createLunarRegolithMaterial(repeatU: number = 16, repeatV: number = 16): THREE.MeshStandardMaterial {
   const albedo = RocketTextures.getRegolithAlbedoTexture(repeatU, repeatV);
   const normal = RocketTextures.getRegolithNormalMap(repeatU, repeatV);
   const bump = RocketTextures.getRegolithBumpMap(repeatU, repeatV);
 
   return new THREE.MeshStandardMaterial({
-    color: 0x8a8d95,
+    color: 0xffffff,
     map: albedo,
     normalMap: normal,
-    normalScale: new THREE.Vector2(2.0, 2.0),
+    normalScale: new THREE.Vector2(2.5, 2.5),
     bumpMap: bump,
-    bumpScale: 0.12,
-    roughness: 0.94,
-    metalness: 0.04,
+    bumpScale: 0.14,
+    roughness: 0.96,
+    metalness: 0.0,
     flatShading: false
   });
 }

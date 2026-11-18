@@ -437,7 +437,7 @@ export class ThreeConductor {
     // Dynamic shadow updates: only when craft or light vectors actively change
     // Render the final settled shadow at the exact p too; a threshold can retain a history-dependent shadow.
     const hasProgressMoved = this.currentProgress !== this.lastRenderedProgress;
-    const isShadowPhase = this.currentProgress < 0.38 || (this.currentProgress >= 0.60 && this.currentProgress <= 0.86);
+    const isShadowPhase = this.currentProgress < 0.38 || this.currentProgress >= 0.70;
 
     if (hasProgressMoved && isShadowPhase) {
       this.renderer.shadowMap.needsUpdate = true;
@@ -506,9 +506,9 @@ export class ThreeConductor {
       if (p < 0.75) {
         // Oblique dramatic space sun angle for high-relief terminator shadows across Moon globe
         this.atmosphere.directionalSun.position.set(48, 22, 10);
-      } else if (p < 0.86) {
-        // Low grazing polar sunlight angle during descent
-        this.atmosphere.directionalSun.position.set(28, 14, 32);
+      } else {
+        // Low grazing polar sunlight angle (~7.5° elevation) for dramatic black shadows across regolith
+        this.atmosphere.directionalSun.position.set(38, 5.8, 22);
       }
       this.atmosphere.rimLight.intensity = 0.0;
     }
@@ -745,7 +745,8 @@ export class ThreeConductor {
       if (this.lander.group.parent !== this.skyDome.group) {
         this.skyDome.group.add(this.lander.group);
       }
-      this.lander.group.position.set(0, 0.85, 0);
+      const landerY = THREE.MathUtils.lerp(0.85, 0.21, domeMorph);
+      this.lander.group.position.set(0, landerY, 0);
       this.lander.group.rotation.set(0, 0, 0);
       this.lander.group.scale.set(this._craftState.landerScale, this._craftState.landerScale, this._craftState.landerScale);
     } else if (p >= 0.55) {

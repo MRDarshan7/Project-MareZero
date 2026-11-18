@@ -675,6 +675,16 @@ export class LanderModel {
     spacecraftFrontFill.position.set(-2.8, 3.2, 5.5);
     this.group.add(spacecraftFrontFill);
 
+    // Enable castShadow and receiveShadow on all lander meshes for sharp polar sunlight shadow casting
+    this.group.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        if (obj !== this.engineFlame && !obj.name.includes('Flame')) {
+          obj.castShadow = true;
+          obj.receiveShadow = true;
+        }
+      }
+    });
+
     // Set initial stowed pose (t = 0)
     this.setDeploy(0);
     this.setThrottle(0);

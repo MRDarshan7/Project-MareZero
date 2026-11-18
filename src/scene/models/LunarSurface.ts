@@ -10,11 +10,13 @@ import { DeterministicPRNG } from '../materials/CelestialTextures';
 function createCircularTerrainDisc(radius: number, rings: number, segments: number, depth: number = 0.45): THREE.BufferGeometry {
   const positions: number[] = [];
   const uvs: number[] = [];
+  const colors: number[] = [];
   const indices: number[] = [];
 
   // Top surface: center vertex
   positions.push(0, 0, 0);
   uvs.push(0.5, 0.5);
+  colors.push(0.345, 0.337, 0.325); // Mid-tone lunar soil
 
   // Top concentric rings
   for (let r = 1; r <= rings; r++) {
@@ -25,6 +27,7 @@ function createCircularTerrainDisc(radius: number, rings: number, segments: numb
       const z = Math.sin(th) * rad;
       positions.push(x, 0, z);
       uvs.push((x / radius) * 0.5 + 0.5, (z / radius) * 0.5 + 0.5);
+      colors.push(0.345, 0.337, 0.325);
     }
   }
 
@@ -52,6 +55,7 @@ function createCircularTerrainDisc(radius: number, rings: number, segments: numb
     const th = (s / segments) * Math.PI * 2;
     positions.push(Math.cos(th) * radius, -depth, Math.sin(th) * radius);
     uvs.push(s / segments, 0);
+    colors.push(0.18, 0.17, 0.16); // Darkened skirt perimeter
   }
 
   for (let s = 0; s < segments; s++) {
@@ -67,9 +71,103 @@ function createCircularTerrainDisc(radius: number, rings: number, segments: numb
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return geo;
+}
+
+interface OrganicCraterDef {
+  cx: number;
+  cz: number;
+  r: number;
+  depth: number;
+  rimHeight: number;
+  seed: number;
+}
+
+const LANDING_CRATERS: OrganicCraterDef[] = [
+  { cx: 8.0, cz: 6.0, r: 5.8, depth: 1.6, rimHeight: 0.38, seed: 1.25 },
+  { cx: -8.8, cz: -6.5, r: 6.2, depth: 1.85, rimHeight: 0.42, seed: 2.85 },
+  { cx: -7.2, cz: 6.8, r: 3.8, depth: 0.95, rimHeight: 0.28, seed: 4.12 },
+  { cx: 7.5, cz: -7.0, r: 4.2, depth: 1.10, rimHeight: 0.30, seed: 0.74 },
+  { cx: 1.5, cz: 9.8, r: 2.4, depth: 0.60, rimHeight: 0.18, seed: 3.44 },
+  { cx: -3.5, cz: -10.2, r: 2.2, depth: 0.55, rimHeight: 0.16, seed: 5.18 },
+];
+
+/**
+ * Calculates organic cratered lunar terrain elevation and surface cavity/rim attributes.
+ * Removes uniform circular stamp rings by perturbing radii with multi-harmonic angular noise
+ * and smoothly blending outer ejecta slopes into surrounding topography.
+ */
+export function calculateTerrainSample(x: number, z: number): { y: number; cavity: number; rim: number } {
+  // 1. Multi-octave harmonic lunar topography
+  let y = Math.sin(x * 0.08) * 0.55 + Math.cos(z * 0.09) * 0.45;
+  y += Math.sin(x * 0.22 + z * 0.18) * 0.28;
+  y += Math.sin(x * 0.55 - z * 0.42) * 0.12;
+  y += Math.sin(x * 1.25 + z * 0.95) * 0.04;
+
+  let cavity = 0;
+  let rim = 0;
+
+  // 2. Organic Impact Craters with Non-uniform Rims & Smooth Ejecta Slopes
+  for (const c of LANDING_CRATERS) {
+    const dx = x - c.cx;
+    const dz = z - c.cz;
+    const dist = Math.hypot(dx, dz);
+    const th = Math.atan2(dz, dx);
+
+    // Organic radius distortion breaking up circular stamp rings
+    const distortion = 1.0
+      + 0.15 * Math.sin(3 * th + c.seed)
+      + 0.08 * Math.cos(5 * th - c.seed * 0.7)
+      + 0.05 * Math.sin(7 * th + c.seed * 1.3)
+      + 0.03 * Math.cos(x * 0.85 - z * 0.75);
+
+    const effR = c.r * distortion;
+    const u = dist / effR;
+
+    if (u < 0.82) {
+      // Excavation cavity (bowl depression)
+      const bowlFactor = Math.cos((u / 0.82) * (Math.PI / 2));
+      const bowlDrop = c.depth * Math.pow(bowlFactor, 1.3);
+      y -= bowlDrop;
+      cavity += bowlFactor;
+    } else if (u < 2.4) {
+      // Organic raised rim & smoothly blended outer ejecta blanket
+      let rimFactor: number;
+      if (u < 0.92) {
+        // Inner rim wall rise
+        rimFactor = Math.sin(((u - 0.82) / 0.10) * (Math.PI / 2));
+      } else {
+        // Outer ejecta slope: smooth exponential decay without sharp cutoff
+        const ejectaU = (u - 0.92) / 1.25;
+        rimFactor = Math.exp(-4.2 * ejectaU * ejectaU);
+      }
+      const lobeFactor = 1.0 + 0.18 * Math.sin(2 * th + c.seed * 0.6);
+      y += c.rimHeight * rimFactor * lobeFactor;
+      if (u >= 0.84 && u <= 1.08) {
+        rim = Math.max(rim, rimFactor);
+      }
+    }
+  }
+
+  // 3. Flat Touchdown Pad at Coordinates (0, 0)
+  const dCenter = Math.hypot(x, z);
+  if (dCenter < 3.2) {
+    const padFactor = Math.pow(dCenter / 3.2, 2.2);
+    y *= padFactor;
+    cavity *= padFactor;
+    rim *= padFactor;
+  }
+
+  // 4. Smooth Radial Falloff at Disc Boundary (R = 16.0)
+  const edgeFactor = Math.max(0, Math.min(1, (16.0 - dCenter) / 2.5));
+  y *= edgeFactor;
+  cavity *= edgeFactor;
+  rim *= edgeFactor;
+
+  return { y, cavity, rim };
 }
 
 /**
@@ -151,7 +249,10 @@ export class LunarSurface {
     this.group.add(this.horizonWallMesh);
 
     // --- 1. Authentic Hapke / Lommel-Seeliger Regolith Material ---
-    const regolithMaterial = createLunarRegolithMaterial();
+    const regolithMaterial = createLunarRegolithMaterial(16, 16);
+    regolithMaterial.vertexColors = true;
+    regolithMaterial.roughness = 0.96;
+    regolithMaterial.metalness = 0.0;
     regolithMaterial.transparent = true;
     regolithMaterial.opacity = 1.0;
 
@@ -162,52 +263,37 @@ export class LunarSurface {
     const terrainGeo = createCircularTerrainDisc(terrainRadius, 48, 96, 0.45);
 
     const pos = terrainGeo.attributes.position;
+    const col = terrainGeo.attributes.color;
     const topCount = 1 + 48 * 96;
     for (let i = 0; i < topCount; i++) {
       const x = pos.getX(i);
       const z = pos.getZ(i);
 
-      // Multi-octave harmonic lunar topography
-      let y = Math.sin(x * 0.08) * 0.55 + Math.cos(z * 0.09) * 0.45;
-      y += Math.sin(x * 0.22 + z * 0.18) * 0.28;
-      y += Math.sin(x * 0.55 - z * 0.42) * 0.12; // micro-undulation
+      const sample = calculateTerrainSample(x, z);
+      pos.setY(i, sample.y);
 
-      const dCenter = Math.hypot(x, z);
+      // Albedo mottling:
+      // Dark basaltic grey #3b3a38 in crater floors blending to lighter highland dust #7d7b76 on ridges
+      let tone = 0.5 + (sample.y * 0.25) + (sample.rim * 0.40) - (sample.cavity * 0.50);
+      const microNoise = (Math.sin(x * 14.0 + z * 11.0) * Math.cos(x * 9.0 - z * 16.0)) * 0.04;
+      tone = Math.max(0.0, Math.min(1.0, tone + microNoise));
 
-      // Ensure stable, flat touchdown zone at coordinates (0, 0)
-      if (dCenter < 3.2) {
-        y *= Math.pow(dCenter / 3.2, 2.0);
+      let cr: number, cg: number, cb: number;
+      if (tone < 0.5) {
+        // Blend from dark basaltic grey (#3b3a38 = 0.231, 0.227, 0.220) to nominal regolith (0.345, 0.337, 0.325)
+        const t = tone / 0.5;
+        cr = THREE.MathUtils.lerp(0.231, 0.345, t);
+        cg = THREE.MathUtils.lerp(0.227, 0.337, t);
+        cb = THREE.MathUtils.lerp(0.220, 0.325, t);
       } else {
-        // Natural depression crater 1
-        const c1Dist = Math.hypot(x - 8, z - 6);
-        if (c1Dist < 6) {
-          const normDist = c1Dist / 6;
-          if (normDist < 0.75) {
-            y -= Math.cos((normDist / 0.75) * (Math.PI / 2)) * 1.5;
-          } else {
-            const rimFactor = Math.sin(((normDist - 0.75) / 0.25) * Math.PI);
-            y += rimFactor * 0.35;
-          }
-        }
-
-        // Natural depression crater 2
-        const c2Dist = Math.hypot(x + 9, z + 7);
-        if (c2Dist < 6.5) {
-          const normDist = c2Dist / 6.5;
-          if (normDist < 0.78) {
-            y -= Math.cos((normDist / 0.78) * (Math.PI / 2)) * 1.8;
-          } else {
-            const rimFactor = Math.sin(((normDist - 0.78) / 0.22) * Math.PI);
-            y += rimFactor * 0.40;
-          }
-        }
+        // Blend from nominal regolith to lighter highland dust (#7d7b76 = 0.490, 0.482, 0.463)
+        const t = (tone - 0.5) / 0.5;
+        cr = THREE.MathUtils.lerp(0.345, 0.490, t);
+        cg = THREE.MathUtils.lerp(0.337, 0.482, t);
+        cb = THREE.MathUtils.lerp(0.325, 0.463, t);
       }
 
-      // Smooth radial falloff so terrain perimeter cleanly flushes with the 16.0m boundary
-      const edgeFactor = Math.max(0, Math.min(1, (16.0 - dCenter) / 2.5));
-      y *= edgeFactor;
-
-      pos.setY(i, y);
+      col.setXYZ(i, cr, cg, cb);
     }
     terrainGeo.computeVertexNormals();
 
@@ -246,35 +332,7 @@ export class LunarSurface {
 
     // Helper to evaluate exact surface height so boulders never float above ground
     const getExactTerrainY = (x: number, z: number): number => {
-      let y = Math.sin(x * 0.08) * 0.55 + Math.cos(z * 0.09) * 0.45;
-      y += Math.sin(x * 0.22 + z * 0.18) * 0.28;
-      y += Math.sin(x * 0.55 - z * 0.42) * 0.12;
-
-      const dCenter = Math.hypot(x, z);
-      if (dCenter < 3.2) {
-        y *= Math.pow(dCenter / 3.2, 2.0);
-      } else {
-        const c1Dist = Math.hypot(x - 8, z - 6);
-        if (c1Dist < 6) {
-          const normDist = c1Dist / 6;
-          if (normDist < 0.75) {
-            y -= Math.cos((normDist / 0.75) * (Math.PI / 2)) * 1.5;
-          } else {
-            y += Math.sin(((normDist - 0.75) / 0.25) * Math.PI) * 0.35;
-          }
-        }
-        const c2Dist = Math.hypot(x + 9, z + 7);
-        if (c2Dist < 6.5) {
-          const normDist = c2Dist / 6.5;
-          if (normDist < 0.78) {
-            y -= Math.cos((normDist / 0.78) * (Math.PI / 2)) * 1.8;
-          } else {
-            y += Math.sin(((normDist - 0.78) / 0.22) * Math.PI) * 0.40;
-          }
-        }
-      }
-      const edgeFactor = Math.max(0, Math.min(1, (16.0 - dCenter) / 2.5));
-      return y * edgeFactor;
+      return calculateTerrainSample(x, z).y;
     };
 
     const dummy = new THREE.Object3D();
@@ -343,11 +401,21 @@ export class LunarSurface {
         let y = Math.sin(x * 0.35 + z * 0.28) * 0.05 + Math.cos(x * 0.65 - z * 0.52) * 0.035;
 
         for (const c of domeCraters) {
-          const dist = Math.hypot(x - c.x, z - c.z);
-          const u = dist / c.r;
-          if (u < 2.0) {
+          const dx = x - c.x;
+          const dz = z - c.z;
+          const dist = Math.hypot(dx, dz);
+          const th = Math.atan2(dz, dx);
+          // Organic rim distortion
+          const distortion = 1.0 + 0.12 * Math.sin(3 * th + c.depth * 10) + 0.07 * Math.cos(5 * th);
+          const effR = c.r * distortion;
+          const u = dist / effR;
+          if (u < 2.4) {
             y -= c.depth * Math.exp(-2.8 * u * u);
-            y += 0.14 * c.depth * Math.exp(-12.0 * Math.pow(u - 1.05, 2));
+            // Smoothly blended organic ejecta slope
+            if (u > 0.8) {
+              const ejectaU = (u - 0.95);
+              y += 0.16 * c.depth * Math.exp(-5.5 * ejectaU * ejectaU);
+            }
           }
         }
 
@@ -364,10 +432,10 @@ export class LunarSurface {
     }
     discGeo.computeVertexNormals();
 
-    const discMat = createLunarRegolithMaterial(4, 4);
+    const discMat = createLunarRegolithMaterial(8, 8);
     discMat.color.setHex(0x16181f); // Darkened matte lunar regolith for crisp wireframe and label contrast
     discMat.roughness = 0.96;
-    discMat.metalness = 0.02;
+    discMat.metalness = 0.0;
 
     this.domeBaseDisc = new THREE.Mesh(discGeo, discMat);
     this.domeBaseDisc.name = 'DomeBaseDisc';
