@@ -389,3 +389,352 @@ footer p { font-size:11px; color:var(--muted); max-width:100ch; }
   .dome-cardinal { font-size:11px; }
 }
 @media(max-width:520px) { .story-debug { top:248px; right:18px; } }
+
+/* ==========================================================================
+   Interactive Study Features & Physics Popovers (Dark Editorial Aesthetic)
+   ========================================================================== */
+
+/* 1. Solar Array Geometry Study Box */
+.array-study-box {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.array-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.array-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: rgba(12, 13, 11, 0.6);
+  overflow: hidden;
+}
+.array-toggle button {
+  border: 0;
+  border-radius: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  transition: all 0.15s ease;
+}
+.array-toggle button:hover {
+  color: var(--bone);
+}
+.array-toggle button.active {
+  background: rgba(236, 232, 221, 0.12);
+  color: var(--bone);
+  font-weight: 500;
+}
+.array-efficiency-readout {
+  font-size: 12px;
+  color: var(--bone);
+}
+.array-dynamic-note {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* 2. Contextual Live Physics Study Popovers */
+.study-popover-container {
+  position: relative;
+  display: inline-flex;
+}
+.study-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(143, 139, 128, 0.4);
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.study-trigger:hover, .study-trigger:focus-visible {
+  color: var(--bone);
+  text-decoration-color: var(--bone);
+}
+.study-trigger-icon {
+  font-size: 10px;
+  opacity: 0.8;
+}
+.study-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(360px, 90vw);
+  z-index: 100;
+  padding: 16px;
+  background: var(--ink);
+  border: 1px solid var(--muted);
+  border-radius: 2px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85);
+  pointer-events: auto;
+}
+.verdict + .verdict .study-popover {
+  left: auto;
+  right: 0;
+}
+.study-popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.study-popover-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-family: Newsreader, Georgia, serif;
+  color: var(--bone);
+}
+.study-popover-close {
+  font-size: 13px;
+  color: var(--muted);
+}
+.study-popover-close:hover {
+  color: var(--bone);
+}
+.study-popover-body p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--bone);
+  margin: 0 0 10px;
+}
+.study-data-table {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  margin: 10px 0;
+  background: rgba(236, 232, 221, 0.04);
+  border: 1px solid var(--line);
+  font-size: 11px;
+}
+.study-data-table > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.study-data-table span {
+  color: var(--muted);
+}
+.study-popover-footer {
+  font-size: 10px;
+  text-align: right;
+  margin-top: 8px;
+}
+.verdict-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.verdict-header-row h2 {
+  margin-bottom: 0;
+}
+.verdict-sub-row {
+  margin: 6px 0 10px;
+}
+
+/* 3. 1-Click Guided Study Presets */
+.site-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.study-menu-container {
+  position: relative;
+}
+.study-examples-button {
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--muted);
+  cursor: pointer;
+}
+.study-examples-button:hover, .study-examples-button:focus-visible {
+  color: var(--bone);
+}
+.study-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 320px;
+  z-index: 100;
+  padding: 10px;
+  background: var(--ink);
+  border: 1px solid var(--muted);
+  border-radius: 2px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85);
+  pointer-events: auto;
+}
+.study-menu-header {
+  font-size: 11px;
+  font-family: Newsreader, Georgia, serif;
+  color: var(--muted);
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.study-menu-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.study-menu-item:hover, .study-menu-item:focus-visible {
+  background: rgba(236, 232, 221, 0.06);
+  border-color: var(--line);
+}
+.preset-title {
+  font-size: 13px;
+  font-family: Newsreader, Georgia, serif;
+  color: var(--bone);
+}
+.preset-sites {
+  font-size: 11px;
+  margin: 2px 0;
+}
+.preset-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* 4. Terrain Toggle & Inline Delta */
+.section-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.terrain-delta-inline {
+  font-size: 11px;
+  color: var(--sun);
+  padding: 2px 8px;
+  border: 1px solid rgba(242, 184, 75, 0.3);
+  border-radius: 2px;
+  background: rgba(242, 184, 75, 0.08);
+}
+.sky-view-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.terrain-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.terrain-toggle:hover {
+  color: var(--bone);
+}
+.flat-indicator {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+
+/* 5. Interactive Timeline Scrubbing & Hover Tooltips */
+.interactive-timeline-band {
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+}
+.timeline-scrubber {
+  position: absolute;
+  top: -12px;
+  width: 2px;
+  height: 33px;
+  background: var(--sun);
+  box-shadow: 0 0 8px rgba(242, 184, 75, 0.6);
+  pointer-events: none;
+  z-index: 10;
+  transform: translateX(-50%);
+}
+.scrubber-head {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sun);
+  border: 1.5px solid var(--ink);
+}
+.scrubber-stem {
+  width: 100%;
+  height: 100%;
+}
+.timeline-hover-guide {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 1px;
+  border-left: 1px dashed rgba(236, 232, 221, 0.4);
+  pointer-events: none;
+  z-index: 5;
+  transform: translateX(-50%);
+}
+.interactive-panorama {
+  cursor: crosshair;
+}
+.floating-dark-popover {
+  position: fixed;
+  z-index: 1000;
+  background: rgba(12, 13, 11, 0.94);
+  border: 1px solid var(--muted);
+  border-radius: 2px;
+  padding: 10px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+  max-width: 380px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.tooltip-title {
+  color: var(--bone);
+  font-weight: 500;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 4px;
+}
+.tooltip-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 3px;
+}
+.tooltip-coords {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--line);
+}
+

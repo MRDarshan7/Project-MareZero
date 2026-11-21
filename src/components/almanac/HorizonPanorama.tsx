@@ -9,13 +9,24 @@ interface Props {
   trail: EphemerisSample[];
   siteName: string;
   compact?: boolean;
+  currentDate?: Date;
 }
 
-export const HorizonPanorama = forwardRef<SVGSVGElement, Props>(({ position, horizon, trail, siteName, compact = false }, ref) => {
+export const HorizonPanorama = forwardRef<SVGSVGElement, Props>(({ position, horizon, trail, siteName, compact = false, currentDate = new Date() }, ref) => {
   const id = useId().replace(/:/g, '');
   const scrollContainer = useRef<HTMLDivElement>(null);
   const rafId = useRef<number | null>(null);
   const [visibleRange, setVisibleRange] = useState({ left: 0, right: 1200 });
+  const [hoverInfo, setHoverInfo] = useState<{
+    az: number;
+    el: number;
+    horizonEl: number;
+    clearance: number;
+    svgX: number;
+    svgY: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
   const width = compact ? 800 : 1200, height = compact ? 360 : 300;
   const left = 52, right = width - 40, top = 34, bottom = height - 62;
 
@@ -95,9 +106,47 @@ export const HorizonPanorama = forwardRef<SVGSVGElement, Props>(({ position, hor
 
   const paths = { sun: sunPath, earth: earthPath };
 
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * width;
+    const svgY = ((e.clientY - rect.top) / rect.height) * height;
+    if (svgX >= left && svgX <= right && svgY >= top && svgY <= bottom) {
+      const az = ((svgX - left) / (right - left)) * 360;
+      const el = low + ((bottom - svgY) / (bottom - top)) * (high - low);
+      const horizonEl = horizon.getElevationAtAzimuth(az);
+      const clearance = el - horizonEl;
+      setHoverInfo({
+        az,
+        el,
+        horizonEl,
+        clearance,
+        svgX,
+        svgY,
+        clientX: e.clientX,
+        clientY: e.clientY
+      });
+    } else {
+      setHoverInfo(null);
+    }
+  };
+
+  const handlePointerLeave = () => {
+    setHoverInfo(null);
+  };
+
   const summary = `${siteName}. Sun ${position.sun.el.toFixed(1)} degrees above the flat horizon, direction ${position.sun.az.toFixed(1)} degrees, ${position.sun.isBlocked ? 'hidden' : 'visible'}. Earth ${position.earth.el.toFixed(1)} degrees, direction ${position.earth.az.toFixed(1)} degrees, ${position.earth.isBlocked ? 'hidden' : 'visible'}. Terrain shown is the selected profile.`;
   return <div ref={scrollContainer} className="panorama-scroll" onScroll={handleScroll} tabIndex={0} aria-label="Scrollable horizon panorama">
-    <svg ref={ref} id="horizon-panorama" className="panorama" viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title ${id}-description`}>
+    <svg
+      ref={ref}
+      id="horizon-panorama"
+      className="panorama interactive-panorama"
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-labelledby={`${id}-title ${id}-description`}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+    >
       <title id={`${id}-title`}>Sun and Earth above the horizon</title>
       <desc id={`${id}-description`}>{summary}</desc>
       <defs><clipPath id={`${id}-plot`}><rect x={left} y={top} width={right - left} height={bottom - top} /></clipPath></defs>
@@ -120,6 +169,13 @@ export const HorizonPanorama = forwardRef<SVGSVGElement, Props>(({ position, hor
         <polyline points={terrain} fill="none" stroke="#ECE8DD" strokeOpacity="0.65" strokeWidth="1" />
         <line x1={left} x2={right} y1={y(0)} y2={y(0)} stroke="#8F8B80" strokeOpacity="0.4" strokeDasharray="3 6" />
         {(['sun', 'earth'] as const).map(body => <path key={body} d={paths[body]} fill="none" stroke={body === 'sun' ? '#F2B84B' : '#5FA8D3'} strokeWidth="1.5" strokeOpacity="0.35" strokeDasharray="3 5" />)}
+        {hoverInfo && (
+          <g className="panorama-hover-guide">
+            <line x1={hoverInfo.svgX} x2={hoverInfo.svgX} y1={top} y2={bottom} stroke="#ECE8DD" strokeOpacity="0.35" strokeDasharray="3 3" />
+            <line x1={left} x2={right} y1={hoverInfo.svgY} y2={hoverInfo.svgY} stroke="#ECE8DD" strokeOpacity="0.2" strokeDasharray="2 4" />
+            <circle cx={hoverInfo.svgX} cy={hoverInfo.svgY} r="3.5" fill="#ECE8DD" stroke="#0C0D0B" strokeWidth="1" />
+          </g>
+        )}
       </g>
       {(['sun', 'earth'] as const).map(body => {
         const point = position[body];
@@ -147,5 +203,28 @@ export const HorizonPanorama = forwardRef<SVGSVGElement, Props>(({ position, hor
         </g>;
       })}
     </svg>
+    {hoverInfo && (
+      <div
+        className="panorama-floating-tooltip floating-dark-popover mono"
+        style={{
+          left: `${Math.min(window.innerWidth - 300, Math.max(16, hoverInfo.clientX + 16))}px`,
+          top: `${Math.max(16, hoverInfo.clientY - 90)}px`
+        }}
+        role="tooltip"
+      >
+        <div className="tooltip-title">{currentDate.toISOString().slice(0, 10)} {currentDate.toISOString().slice(11, 16)} UTC</div>
+        <div className="tooltip-row">
+          <span className="sun-text">Sun:</span>
+          <span>{position.sun.el >= 0 ? '+' : ''}{position.sun.el.toFixed(1)}° el · clearance: {(position.sun.el - position.sun.horizonElevation) >= 0 ? '+' : ''}{(position.sun.el - position.sun.horizonElevation).toFixed(1)}° · {position.sun.isBlocked ? 'Blocked (Shadow)' : 'Visible'}</span>
+        </div>
+        <div className="tooltip-row">
+          <span className="earth-text">Earth:</span>
+          <span>{position.earth.el >= 0 ? '+' : ''}{position.earth.el.toFixed(1)}° el · clearance: {(position.earth.el - position.earth.horizonElevation) >= 0 ? '+' : ''}{(position.earth.el - position.earth.horizonElevation).toFixed(1)}° · {position.earth.isBlocked ? 'Blocked (Occulted)' : 'Visible (LOS)'}</span>
+        </div>
+        <div className="tooltip-coords muted">
+          <span>Point: Az {hoverInfo.az.toFixed(1)}° · El {hoverInfo.el.toFixed(1)}° · Terrain {hoverInfo.horizonEl.toFixed(1)}°</span>
+        </div>
+      </div>
+    )}
   </div>;
 });

@@ -3,9 +3,22 @@ import { LandingSite } from '../../types';
 import { EphemerisEngine } from '../../ephemeris/engine';
 import { formatDate, duration, terrainLabel } from '../../utils/almanac';
 
-export function Compare({ sites, currentSite, date }: { sites: LandingSite[]; currentSite: LandingSite; date: Date }) {
-  const [combos, setCombos] = useState(() => [currentSite, ...sites.filter(s => ['shackleton-connecting-ridge', 'malapert-massif', 'apollo-11'].includes(s.id) && s.id !== currentSite.id)]
+export function Compare({ sites, currentSite, date, compareCombos, onUpdateCombos }: {
+  sites: LandingSite[];
+  currentSite: LandingSite;
+  date: Date;
+  compareCombos?: Array<{ siteId: string; date: string }>;
+  onUpdateCombos?: (combos: Array<{ siteId: string; date: string }>) => void;
+}) {
+  const [internalCombos, setInternalCombos] = useState(() => [currentSite, ...sites.filter(s => ['shackleton-connecting-ridge', 'malapert-massif', 'apollo-11'].includes(s.id) && s.id !== currentSite.id)]
     .slice(0, 3).map(site => ({ siteId: site.id, date: date.toISOString().slice(0, 10) })));
+  
+  const combos = compareCombos || internalCombos;
+  const setCombos = (updater: (prev: Array<{ siteId: string; date: string }>) => Array<{ siteId: string; date: string }>) => {
+    const next = updater(combos);
+    if (onUpdateCombos) onUpdateCombos(next);
+    else setInternalCombos(next);
+  };
   const rows = useMemo(() => combos.map(combo => {
     const site = sites.find(s => s.id === combo.siteId)!;
     const epoch = new Date(combo.date + 'T00:00:00Z');
