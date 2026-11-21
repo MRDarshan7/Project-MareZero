@@ -72,6 +72,10 @@ export default function AlmanacDashboard({ store, scene, onWatchStory }: {
   const cosEffPercent = (vertFactor * 100).toFixed(1);
   const sinEffPercent = (horizFactor * 100).toFixed(1);
 
+  const formulaLabel = isSunBlocked
+    ? (sunEl <= 0 ? 'below horizon' : 'terrain occluded')
+    : (solarArch === 'vertical' ? `cos(${sunEl.toFixed(1)}°)` : `sin(${sunEl.toFixed(1)}°)`);
+
   const arrayNote = isSunBlocked
     ? `Sun is below terrain horizon (${sunEl.toFixed(1)}°, 0.0% collection) — lander requires battery storage or fuel cells.`
     : Math.abs(site.lat) > 65 || sunEl < 15
@@ -239,7 +243,7 @@ export default function AlmanacDashboard({ store, scene, onWatchStory }: {
                 </div>
                 <span className="array-efficiency-readout mono">
                   Collection: <strong className={activeEff > 0 ? 'sun-text' : 'muted'}>{activeEffPercent}%</strong>
-                  <small className="muted"> ({solarArch === 'vertical' ? `cos(${Math.max(0, sunEl).toFixed(1)}°)` : `sin(${Math.max(0, sunEl).toFixed(1)}°)`})</small>
+                  <small className="muted"> ({formulaLabel})</small>
                 </span>
               </div>
               <p className="array-dynamic-note">{arrayNote}</p>

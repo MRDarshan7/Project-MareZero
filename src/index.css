@@ -313,6 +313,7 @@ footer p { font-size:11px; color:var(--muted); max-width:100ch; }
 .dome-labels { position:absolute; inset:0; z-index:2; pointer-events:none; font-family:'IBM Plex Mono',monospace; }
 .celestial-label {
   position: absolute;
+  z-index: 5;
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
@@ -337,6 +338,7 @@ footer p { font-size:11px; color:var(--muted); max-width:100ch; }
 }
 .dome-cardinal {
   position: absolute;
+  z-index: 2;
   color: #ECE8DD;
   font-size: 11px;
   font-weight: 600;
@@ -436,11 +438,14 @@ footer p { font-size:11px; color:var(--muted); max-width:100ch; }
   font-size: 12px;
   color: var(--bone);
 }
+.verdict .array-dynamic-note,
 .array-dynamic-note {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.4;
-  margin: 0;
+  font-family: 'IBM Plex Sans', sans-serif !important;
+  font-size: 12px !important;
+  color: var(--muted) !important;
+  line-height: 1.45 !important;
+  margin: 6px 0 0 !important;
+  max-width: none !important;
 }
 
 /* 2. Contextual Live Physics Study Popovers */
@@ -553,20 +558,31 @@ footer p { font-size:11px; color:var(--muted); max-width:100ch; }
 /* 3. 1-Click Guided Study Presets */
 .site-actions-group {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  align-items: baseline;
+  gap: 16px;
   margin-bottom: 10px;
 }
-.study-menu-container {
-  position: relative;
+.site-actions-group .custom-site-button {
+  margin-bottom: 0 !important;
+  font-size: 13px;
+  line-height: 1.4;
+  vertical-align: baseline;
 }
-.study-examples-button {
+.site-actions-group .study-menu-container {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+}
+.site-actions-group .study-examples-button {
   font-size: 13px;
   white-space: nowrap;
   color: var(--muted);
   cursor: pointer;
+  line-height: 1.4;
+  vertical-align: baseline;
 }
-.study-examples-button:hover, .study-examples-button:focus-visible {
+.site-actions-group .study-examples-button:hover,
+.site-actions-group .study-examples-button:focus-visible {
   color: var(--bone);
 }
 .study-dropdown-menu {

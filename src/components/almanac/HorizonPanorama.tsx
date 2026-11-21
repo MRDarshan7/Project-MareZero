@@ -183,7 +183,7 @@ export const HorizonPanorama = forwardRef<SVGSVGElement, Props>(({ position, hor
         const radius = body === 'sun' ? 6 : 6 * 1.9 / 0.53;
         const color = body === 'sun' ? '#F2B84B' : '#5FA8D3';
         const px = x(point.az), py = y(point.el);
-        const label = `${body === 'sun' ? 'Sun' : 'Earth'} ${point.el.toFixed(1)} deg${point.isBlocked ? ' · hidden' : ''}`;
+        const label = `${body === 'sun' ? 'Sun' : 'Earth'} ${point.el.toFixed(1)}°${point.isBlocked ? ' · hidden' : ''}`;
         const textWidth = label.length * 9.65;
         const labelLeft = Math.max(left + 6, visibleRange.left + 10);
         const labelRight = Math.min(right - 6, visibleRange.right - 10);

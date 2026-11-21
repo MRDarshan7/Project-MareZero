@@ -59,11 +59,11 @@ export function DomeLabels({ scene, position, story = false }: { scene: SceneBri
         earthLabel.current.style.top = Math.max(12, Math.min(height - 34, y + 26)) + 'px';
       }
 
-      // 3. Cardinal Direction Markers
+      // 3. Cardinal Direction Markers (offset slightly outward past dome rim)
       for (let index = 0; index < 4; index++) {
         const node = cardinals.current[index];
         if (!node) continue;
-        conductor.skyDome.toCartesian(CARDINAL_AZ[index], 0, 16.2, _labelPoint);
+        conductor.skyDome.toCartesian(CARDINAL_AZ[index], -0.6, 18.2, _labelPoint);
         _labelPoint.applyMatrix4(conductor.skyDome.domeWireframeGroup.matrixWorld);
         _labelPoint.project(conductor.camera);
         node.style.left = Math.max(12, Math.min(width - 24, ((_labelPoint.x + 1) / 2) * width)) + 'px';
